@@ -175,7 +175,7 @@ body {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
 
-::root {
+:root {
   --org-primary: #059669;
   --org-primary-dark: #047857;
   --org-accent: #2563eb;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
@@ -38,6 +38,7 @@ import { ArrowLeft, ImageIcon, Edit3, Package, FileText } from "lucide-react";
 export default function AssetDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [asset, setAsset] = useState(null);
   const [staff, setStaff] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -62,6 +63,21 @@ export default function AssetDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBack = () => {
+    // If this detail page was opened from the admin assets screen,
+    // the URL will include ?view=admin. In that case, ALWAYS go back
+    // to the admin assets management screen, regardless of any other state.
+    const openedFromAdmin = !!searchParams?.get("view");
+
+    if (openedFromAdmin) {
+      router.push("/admin/assets");
+      return;
+    }
+
+    // Fallback: normal user assets list
+    router.push("/assets");
   };
 
   const canManageAssets =
@@ -95,13 +111,11 @@ export default function AssetDetailPage() {
           </Alert>
           <div className="mt-4">
             <Button
-              asChild
               className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleBack}
             >
-              <Link href="/assets">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Assets
-              </Link>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Assets
             </Button>
           </div>
         </div>
@@ -132,15 +146,13 @@ export default function AssetDetailPage() {
           {/* Back Button */}
           <div className="flex items-center gap-2">
             <Button
-              asChild
               variant="ghost"
               size="sm"
               className="text-green-600 hover:text-green-700 hover:bg-green-50"
+              onClick={handleBack}
             >
-              <Link href="/assets">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Assets
-              </Link>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Assets
             </Button>
           </div>
 

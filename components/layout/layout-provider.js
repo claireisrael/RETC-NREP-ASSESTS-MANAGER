@@ -34,11 +34,11 @@ export default function LayoutProvider({ children }) {
   const isTopNavOnly = pathname.startsWith("/guest");
 
   // Session timeout configuration
-  // Users will be logged out after 8 minutes of inactivity
-  // Warning modal appears at 6 minutes (2 minutes before logout)
+  // Users will be logged out after 20 minutes of inactivity
+  // Warning modal appears at 18 minutes (2 minutes before logout)
   const { WarningModal } = useInactivityLogout({
-    inactivityTimeout: 8 * 60 * 1000, // 8 minutes of inactivity before logout
-    warningTimeout: 2 * 60 * 1000, // 2 minutes warning before logout (shows at 6 minutes)
+    inactivityTimeout: 20 * 60 * 1000, // 20 minutes of inactivity before logout
+    warningTimeout: 2 * 60 * 1000, // 2 minutes warning before logout (shows at 18 minutes)
     enabled: !isNoLayout && !isTopNavOnly && staff !== null, // Only enable for authenticated staff
   });
 

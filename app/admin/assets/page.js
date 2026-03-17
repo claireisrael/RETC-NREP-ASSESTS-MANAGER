@@ -1756,7 +1756,7 @@ export default function AdminAssetManagement() {
                               size="sm"
                               className={`h-10 w-10 p-0 transition-all duration-200 group/btn ${actionButtonClass}`}
                             >
-                              <Link href={`/assets/${asset.$id}`}>
+                              <Link href={`/assets/${asset.$id}?view=admin`}>
                                 <Eye className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
                               </Link>
                             </Button>
@@ -1923,7 +1923,7 @@ export default function AdminAssetManagement() {
                                   size="sm"
                                   className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionButtonClass}`}
                                 >
-                                  <Link href={`/assets/${asset.$id}`}>
+                                  <Link href={`/assets/${asset.$id}?view=admin`}>
                                     <Eye className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                                   </Link>
                                 </Button>
