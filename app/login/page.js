@@ -501,7 +501,7 @@ export default function LoginPage() {
                         type="email"
                         autoComplete="email"
                         required
-                        className="pl-12 pr-4 py-4 block w-full rounded-2xl border-2 border-gray-200/50 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 bg-white/70 backdrop-blur-sm hover:bg-white/80 focus:bg-white/90 shadow-sm hover:shadow-md focus:shadow-lg"
+                        className="login-field pl-12 pr-4 py-4 h-12 block w-full rounded-2xl border border-slate-200/80 bg-white text-slate-900 placeholder:text-slate-400 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.06)] hover:border-slate-300 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_6px_16px_rgba(15,23,42,0.08)] focus:bg-white focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-200"
                         placeholder="Enter your email address"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -538,7 +538,7 @@ export default function LoginPage() {
                         type={showPassword ? "text" : "password"}
                         autoComplete="current-password"
                         required
-                        className="pl-12 pr-12 py-4 block w-full rounded-2xl border-2 border-gray-200/50 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 bg-white/70 backdrop-blur-sm hover:bg-white/80 focus:bg-white/90 shadow-sm hover:shadow-md focus:shadow-lg"
+                        className="login-field pl-12 pr-12 py-4 h-12 block w-full rounded-2xl border border-slate-200/80 bg-white text-slate-900 placeholder:text-slate-400 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.06)] hover:border-slate-300 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_6px_16px_rgba(15,23,42,0.08)] focus:bg-white focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-200"
                         placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -596,7 +596,7 @@ export default function LoginPage() {
                         name="remember-me"
                         type="checkbox"
                         className="h-4 w-4 border-2 border-gray-300 rounded transition-all duration-200"
-                        style={{ accentColor: "var(--org-primary)" }}
+                        style={{ accentColor: "var(--org-highlight)" }}
                       />
                       <label
                         htmlFor="remember-me"

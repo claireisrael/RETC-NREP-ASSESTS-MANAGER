@@ -747,30 +747,50 @@ export default function Sidebar() {
                   <div className="space-y-2">
                     <div className="flex space-x-2">
                       <Button
-                        variant={viewMode === "user" ? "default" : "ghost"}
+                        variant="ghost"
                         size="sm"
                         className={`sidebar-user-toggle flex-1 text-xs h-8 transition-all duration-200 font-medium ${
                           viewMode === "user"
-                            ? "bg-gradient-to-r from-[var(--org-primary)] to-[var(--org-highlight)] text-white shadow-lg scale-[1.02]"
-                            : "!text-white border-2 border-white/60 bg-gradient-to-r from-[var(--org-primary)]/50 to-[var(--org-highlight)]/40 hover:from-[var(--org-primary)]/70 hover:to-[var(--org-highlight)]/60 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
+                            ? "sidebar-toggle-active !bg-[var(--org-primary)] !text-white !border !border-[var(--org-primary)] shadow-md"
+                            : "sidebar-toggle-idle !bg-white !text-slate-900 !border-2 !border-[var(--org-primary)] hover:!bg-white hover:!text-slate-900"
                         }`}
                         onClick={() => switchViewMode("user")}
                       >
-                        <Eye className="w-3 h-3 mr-1 !text-white" />
-                        <span className="!text-white">User</span>
+                        <Eye
+                          className={`w-3 h-3 mr-1 ${
+                            viewMode === "user" ? "!text-white" : "!text-slate-900"
+                          }`}
+                        />
+                        <span
+                          className={
+                            viewMode === "user" ? "!text-white" : "!text-slate-900"
+                          }
+                        >
+                          User
+                        </span>
                       </Button>
                       <Button
-                        variant={viewMode === "admin" ? "default" : "ghost"}
+                        variant="ghost"
                         size="sm"
                         className={`sidebar-user-toggle flex-1 text-xs h-8 transition-all duration-200 font-medium ${
                           viewMode === "admin"
-                            ? "bg-gradient-to-r from-[var(--org-primary)] to-[var(--org-highlight)] text-white shadow-lg scale-[1.02]"
-                            : "!text-white border-2 border-white/60 bg-gradient-to-r from-[var(--org-primary)]/50 to-[var(--org-highlight)]/40 hover:from-[var(--org-primary)]/70 hover:to-[var(--org-highlight)]/60 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
+                            ? "sidebar-toggle-active !bg-[var(--org-primary)] !text-white !border !border-[var(--org-primary)] shadow-md"
+                            : "sidebar-toggle-idle !bg-white !text-slate-900 !border-2 !border-[var(--org-primary)] hover:!bg-white hover:!text-slate-900"
                         }`}
                         onClick={() => switchViewMode("admin")}
                       >
-                        <Shield className="w-3 h-3 mr-1 !text-white" />
-                        <span className="!text-white">Admin</span>
+                        <Shield
+                          className={`w-3 h-3 mr-1 ${
+                            viewMode === "admin" ? "!text-white" : "!text-slate-900"
+                          }`}
+                        />
+                        <span
+                          className={
+                            viewMode === "admin" ? "!text-white" : "!text-slate-900"
+                          }
+                        >
+                          Admin
+                        </span>
                       </Button>
                     </div>
                   </div>
@@ -782,7 +802,7 @@ export default function Sidebar() {
           {/* Navigation */}
           <nav className="flex-1 px-4 pb-4 overflow-y-auto">
             <div className="space-y-2">
-              {/* Mode indicator for collapsed sidebar */}
+              {/* Collapsed mode indicator */}
               {isCollapsed && (
                 <div className="flex justify-center pb-2">
                   <div
@@ -790,22 +810,6 @@ export default function Sidebar() {
                       viewMode === "admin" ? "bg-red-500" : "bg-sidebar-500"
                     }`}
                   />
-                </div>
-              )}
-
-              {/* Current View Label */}
-              {!isCollapsed && (
-                <div className="px-3 py-2">
-                  <Badge
-                    variant="outline"
-                    className={`badge-mode ${
-                      viewMode === "admin"
-                        ? "badge-mode--admin"
-                        : "badge-mode--user"
-                    }`}
-                  >
-                    {viewMode === "admin" ? "Admin Mode" : "User Mode"}
-                  </Badge>
                 </div>
               )}
 
@@ -957,30 +961,50 @@ export default function Sidebar() {
                 <div className="space-y-2">
                   <div className="flex space-x-2">
                     <Button
-                      variant={viewMode === "user" ? "default" : "ghost"}
+                      variant="ghost"
                       size="sm"
-                      className={`flex-1 text-xs h-8 transition-all duration-200 font-medium ${
+                      className={`flex-1 text-xs h-8 transition-all duration-200 font-medium sidebar-user-toggle ${
                         viewMode === "user"
-                          ? "bg-gradient-to-r from-[var(--org-primary)] to-[var(--org-highlight)] text-white shadow-lg scale-[1.02]"
-                          : "!text-white border-2 border-white/60 bg-gradient-to-r from-[var(--org-primary)]/50 to-[var(--org-highlight)]/40 hover:from-[var(--org-primary)]/70 hover:to-[var(--org-highlight)]/60 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
+                          ? "sidebar-toggle-active !bg-[var(--org-primary)] !text-white !border !border-[var(--org-primary)] shadow-md"
+                          : "sidebar-toggle-idle !bg-white !text-slate-900 !border-2 !border-[var(--org-primary)] hover:!bg-white hover:!text-slate-900"
                       }`}
                       onClick={() => switchViewMode("user")}
                     >
-                      <Eye className="w-3 h-3 mr-1 !text-white" />
-                      <span className="!text-white">User</span>
+                      <Eye
+                        className={`w-3 h-3 mr-1 ${
+                          viewMode === "user" ? "!text-white" : "!text-slate-900"
+                        }`}
+                      />
+                      <span
+                        className={
+                          viewMode === "user" ? "!text-white" : "!text-slate-900"
+                        }
+                      >
+                        User
+                      </span>
                     </Button>
                     <Button
-                      variant={viewMode === "admin" ? "default" : "ghost"}
+                      variant="ghost"
                       size="sm"
-                      className={`flex-1 text-xs h-8 transition-all duration-200 font-medium ${
+                      className={`flex-1 text-xs h-8 transition-all duration-200 font-medium sidebar-user-toggle ${
                         viewMode === "admin"
-                          ? "bg-gradient-to-r from-[var(--org-primary)] to-[var(--org-highlight)] text-white shadow-lg scale-[1.02]"
-                          : "!text-white border-2 border-white/60 bg-gradient-to-r from-[var(--org-primary)]/50 to-[var(--org-highlight)]/40 hover:from-[var(--org-primary)]/70 hover:to-[var(--org-highlight)]/60 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
+                          ? "sidebar-toggle-active !bg-[var(--org-primary)] !text-white !border !border-[var(--org-primary)] shadow-md"
+                          : "sidebar-toggle-idle !bg-white !text-slate-900 !border-2 !border-[var(--org-primary)] hover:!bg-white hover:!text-slate-900"
                       }`}
                       onClick={() => switchViewMode("admin")}
                     >
-                      <Shield className="w-3 h-3 mr-1 !text-white" />
-                      <span className="!text-white">Admin</span>
+                      <Shield
+                        className={`w-3 h-3 mr-1 ${
+                          viewMode === "admin" ? "!text-white" : "!text-slate-900"
+                        }`}
+                      />
+                      <span
+                        className={
+                          viewMode === "admin" ? "!text-white" : "!text-slate-900"
+                        }
+                      >
+                        Admin
+                      </span>
                     </Button>
                   </div>
                 </div>
@@ -991,15 +1015,6 @@ export default function Sidebar() {
           {/* Mobile Navigation */}
           <nav className="flex-1 px-4 pb-4 overflow-y-auto">
             <div className="space-y-2">
-              {/* Current View Label */}
-              <div className="px-3 py-2">
-                <Badge
-                  className={`bg-org-gradient text-white text-xs font-medium border-org-muted`}
-                >
-                  {viewMode === "admin" ? "Admin Mode" : "User Mode"}
-                </Badge>
-              </div>
-
               {/* User Navigation */}
               {viewMode === "user" && (
                 <div className="space-y-1">
@@ -1041,7 +1056,7 @@ export default function Sidebar() {
                 <div className="space-y-1">
                   <div className="px-3 py-2">
                     <p className="text-xs font-semibold text-org-highlight uppercase tracking-wider">
-                      {viewMode === "admin" ? "Admin Menu" : "User Menu"}
+                      Admin Menu
                     </p>
                   </div>
                   {adminNavItems.map((item) => (
