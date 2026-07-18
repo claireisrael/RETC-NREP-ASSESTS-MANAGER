@@ -828,13 +828,13 @@ export default function AdminConsumablesPage() {
       className="min-h-screen"
       style={{ background: "var(--org-background)" }}
     >
-      <div className="container mx-auto p-6 space-y-6 max-w-7xl">
+      <div className="container mx-auto p-6 space-y-8 max-w-7xl">
         {/* Header */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-6">
-          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
-            <div>
+        <div className="rounded-2xl border border-slate-200/80 bg-white px-7 py-8 sm:px-8 sm:py-9">
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-6">
+            <div className="max-w-xl space-y-3">
               <h1
-                className="text-3xl font-bold tracking-tight"
+                className="text-3xl sm:text-[2rem] font-bold tracking-tight leading-tight"
                 style={{
                   color:
                     "color-mix(in srgb, var(--org-primary-dark) 72%, #0f172a 28%)",
@@ -842,7 +842,7 @@ export default function AdminConsumablesPage() {
               >
                 Consumable Management
               </h1>
-              <p className="text-slate-600 mt-1">
+              <p className="text-[15px] text-slate-500 leading-relaxed">
                 Manage consumable inventory and stock levels
               </p>
             </div>
@@ -1307,66 +1307,68 @@ export default function AdminConsumablesPage() {
           </div>
 
           {/* Key Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 pt-1">
             {/* Total Consumables */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-all duration-200 hover:border-[var(--org-primary)]/35"
-              style={{ borderLeft: "4px solid var(--org-primary)" }}
+            <button
+              type="button"
+              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
+              style={{
+                borderLeft: "4px solid var(--org-primary)",
+                boxShadow: "none",
+              }}
               onClick={() => {
                 setFilterStatus("all");
                 setIgnoreScopeFilter(false);
                 router.replace("/admin/consumables");
               }}
             >
-              <CardContent className="p-6 min-h-[148px] flex flex-col justify-between">
-                <div className="flex items-start justify-between gap-3">
-                  <p
-                    className="text-[13px] font-semibold leading-snug tracking-wide"
-                    style={{ color: "var(--org-primary-dark)" }}
-                  >
-                    Total Consumables
-                  </p>
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                    style={{
-                      background:
-                        "color-mix(in srgb, var(--org-primary) 14%, white)",
-                      color: "var(--org-primary)",
-                    }}
-                  >
-                    <Package className="h-5 w-5" />
-                  </div>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Total Consumables
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary) 12%, white)",
+                    color: "var(--org-primary)",
+                  }}
+                >
+                  <Package className="h-5 w-5" />
                 </div>
-                <div className="mt-4">
-                  <div
-                    className="text-4xl font-bold tracking-tight tabular-nums leading-none"
-                    style={{ color: "var(--org-primary-dark)" }}
-                  >
-                    {consumables.length}
-                  </div>
-                  <p className="text-sm text-slate-500 mt-2.5 leading-relaxed">
-                    {
-                      consumables.filter(
-                        (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
-                      ).length
-                    }{" "}
-                    in stock ·{" "}
-                    {
-                      consumables.filter(
-                        (c) =>
-                          getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
-                      ).length
-                    }{" "}
-                    low stock
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-primary-dark)" }}
+                >
+                  {consumables.length}
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  {
+                    consumables.filter(
+                      (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
+                    ).length
+                  }{" "}
+                  in stock ·{" "}
+                  {
+                    consumables.filter(
+                      (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+                    ).length
+                  }{" "}
+                  low stock
+                </p>
+              </div>
+            </button>
 
             {/* In Stock */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-all duration-200 hover:border-[var(--org-primary-dark)]/40"
-              style={{ borderLeft: "4px solid var(--org-primary-dark)" }}
+            <button
+              type="button"
+              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
+              style={{
+                borderLeft: "4px solid var(--org-primary-dark)",
+                boxShadow: "none",
+              }}
               onClick={() => {
                 setFilterStatus(ENUMS.CONSUMABLE_STATUS.IN_STOCK);
                 setIgnoreScopeFilter(true);
@@ -1378,47 +1380,46 @@ export default function AdminConsumablesPage() {
                 );
               }}
             >
-              <CardContent className="p-6 min-h-[148px] flex flex-col justify-between">
-                <div className="flex items-start justify-between gap-3">
-                  <p
-                    className="text-[13px] font-semibold leading-snug tracking-wide"
-                    style={{ color: "var(--org-primary-dark)" }}
-                  >
-                    In Stock
-                  </p>
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                    style={{
-                      background:
-                        "color-mix(in srgb, var(--org-primary-dark) 14%, white)",
-                      color: "var(--org-primary-dark)",
-                    }}
-                  >
-                    <CheckCircle className="h-5 w-5" />
-                  </div>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  In Stock
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary-dark) 12%, white)",
+                    color: "var(--org-primary-dark)",
+                  }}
+                >
+                  <CheckCircle className="h-5 w-5" />
                 </div>
-                <div className="mt-4">
-                  <div
-                    className="text-4xl font-bold tracking-tight tabular-nums leading-none"
-                    style={{ color: "var(--org-primary-dark)" }}
-                  >
-                    {
-                      consumables.filter(
-                        (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
-                      ).length
-                    }
-                  </div>
-                  <p className="text-sm text-slate-500 mt-2.5 leading-relaxed">
-                    Available for use
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-primary-dark)" }}
+                >
+                  {
+                    consumables.filter(
+                      (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
+                    ).length
+                  }
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  Available for use
+                </p>
+              </div>
+            </button>
 
             {/* Low Stock */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-all duration-200 hover:border-[var(--org-highlight)]/45"
-              style={{ borderLeft: "4px solid var(--org-highlight)" }}
+            <button
+              type="button"
+              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-highlight)]/30"
+              style={{
+                borderLeft: "4px solid var(--org-highlight)",
+                boxShadow: "none",
+              }}
               onClick={() => {
                 setFilterStatus(ENUMS.CONSUMABLE_STATUS.LOW_STOCK);
                 setIgnoreScopeFilter(true);
@@ -1430,48 +1431,46 @@ export default function AdminConsumablesPage() {
                 );
               }}
             >
-              <CardContent className="p-6 min-h-[148px] flex flex-col justify-between">
-                <div className="flex items-start justify-between gap-3">
-                  <p
-                    className="text-[13px] font-semibold leading-snug tracking-wide"
-                    style={{ color: "var(--org-highlight-dark)" }}
-                  >
-                    Low Stock
-                  </p>
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                    style={{
-                      background:
-                        "color-mix(in srgb, var(--org-highlight) 18%, white)",
-                      color: "var(--org-highlight-dark)",
-                    }}
-                  >
-                    <AlertTriangle className="h-5 w-5" />
-                  </div>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Low Stock
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-highlight) 16%, white)",
+                    color: "var(--org-highlight-dark)",
+                  }}
+                >
+                  <AlertTriangle className="h-5 w-5" />
                 </div>
-                <div className="mt-4">
-                  <div
-                    className="text-4xl font-bold tracking-tight tabular-nums leading-none"
-                    style={{ color: "var(--org-highlight-dark)" }}
-                  >
-                    {
-                      consumables.filter(
-                        (c) =>
-                          getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
-                      ).length
-                    }
-                  </div>
-                  <p className="text-sm text-slate-500 mt-2.5 leading-relaxed">
-                    Needs restocking
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-highlight-dark)" }}
+                >
+                  {
+                    consumables.filter(
+                      (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+                    ).length
+                  }
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  Needs restocking
+                </p>
+              </div>
+            </button>
 
             {/* Out of Stock */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-all duration-200 hover:border-[var(--org-highlight-dark)]/45"
-              style={{ borderLeft: "4px solid var(--org-highlight-dark)" }}
+            <button
+              type="button"
+              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-red-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/25"
+              style={{
+                borderLeft: "4px solid #dc2626",
+                boxShadow: "none",
+              }}
               onClick={() => {
                 setFilterStatus(ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK);
                 setIgnoreScopeFilter(true);
@@ -1483,84 +1482,68 @@ export default function AdminConsumablesPage() {
                 );
               }}
             >
-              <CardContent className="p-6 min-h-[148px] flex flex-col justify-between">
-                <div className="flex items-start justify-between gap-3">
-                  <p
-                    className="text-[13px] font-semibold leading-snug tracking-wide"
-                    style={{ color: "var(--org-highlight-dark)" }}
-                  >
-                    Out of Stock
-                  </p>
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                    style={{
-                      background:
-                        "color-mix(in srgb, var(--org-highlight-dark) 16%, white)",
-                      color: "var(--org-highlight-dark)",
-                    }}
-                  >
-                    <AlertTriangle className="h-5 w-5" />
-                  </div>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Out of Stock
+                </p>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                  <AlertTriangle className="h-5 w-5" />
                 </div>
-                <div className="mt-4">
-                  <div
-                    className="text-4xl font-bold tracking-tight tabular-nums leading-none"
-                    style={{ color: "var(--org-highlight-dark)" }}
-                  >
-                    {
-                      consumables.filter(
-                        (c) =>
-                          getStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
-                      ).length
-                    }
-                  </div>
-                  <p className="text-sm text-slate-500 mt-2.5 leading-relaxed">
-                    Needs immediate attention
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none text-red-600">
+                  {
+                    consumables.filter(
+                      (c) =>
+                        getStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
+                    ).length
+                  }
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  Needs immediate{" "}
+                  <span className="font-semibold text-red-600">attention</span>
+                </p>
+              </div>
+            </button>
 
             {/* Categories */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none"
-              style={{ borderLeft: "4px solid var(--org-primary)" }}
+            <div
+              className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col"
+              style={{
+                borderLeft: "4px solid var(--org-primary)",
+                boxShadow: "none",
+              }}
             >
-              <CardContent className="p-6 min-h-[148px] flex flex-col justify-between">
-                <div className="flex items-start justify-between gap-3">
-                  <p
-                    className="text-[13px] font-semibold leading-snug tracking-wide"
-                    style={{ color: "var(--org-primary-dark)" }}
-                  >
-                    Categories
-                  </p>
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                    style={{
-                      background:
-                        "color-mix(in srgb, var(--org-primary) 14%, white)",
-                      color: "var(--org-primary)",
-                    }}
-                  >
-                    <ShoppingCart className="h-5 w-5" />
-                  </div>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Categories
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary) 12%, white)",
+                    color: "var(--org-primary)",
+                  }}
+                >
+                  <ShoppingCart className="h-5 w-5" />
                 </div>
-                <div className="mt-4">
-                  <div
-                    className="text-4xl font-bold tracking-tight tabular-nums leading-none"
-                    style={{ color: "var(--org-primary-dark)" }}
-                  >
-                    {
-                      new Set(consumables.map((c) => getConsumableCategory(c)))
-                        .size
-                    }
-                  </div>
-                  <p className="text-sm text-slate-500 mt-2.5 leading-relaxed">
-                    Different types
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-primary-dark)" }}
+                >
+                  {
+                    new Set(consumables.map((c) => getConsumableCategory(c)))
+                      .size
+                  }
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  Different types
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Filters */}
