@@ -37,6 +37,7 @@ import { formatCategory } from "../../../../lib/utils/mappings.js";
 import { useOrgTheme } from "../../../../components/providers/org-theme-provider";
 import { getConsumableCategoriesForOrg } from "../../../../lib/constants/consumable-categories.js";
 import { getCurrentOrgId } from "../../../../lib/utils/org.js";
+import { AccessoriesEditor } from "../../../../components/assets/accessories-editor";
 
 export default function NewConsumablePage() {
   const router = useRouter();
@@ -79,6 +80,7 @@ export default function NewConsumablePage() {
     roomOrArea: "",
     isPublic: false,
     publicSummary: "",
+    accessories: [],
     consumableScope: isNrepOrg
       ? ENUMS.CONSUMABLE_SCOPE.PROJECT
       : ENUMS.CONSUMABLE_SCOPE.ADMIN,
@@ -168,7 +170,7 @@ export default function NewConsumablePage() {
       const staff = await getCurrentStaff();
       setCurrentStaff(staff);
 
-      if (!staff || !permissions.canManageAssets(staff)) {
+      if (!staff || !permissions.canManageConsumables(staff)) {
         router.push("/unauthorized");
         return;
       }
@@ -246,6 +248,11 @@ export default function NewConsumablePage() {
         // Location information
         locationName: consumable.locationName || "",
         roomOrArea: consumable.roomOrArea || "",
+
+        // Accessories (optional)
+        accessories: Array.isArray(consumable.accessories)
+          ? consumable.accessories.map((a) => a.trim()).filter(Boolean)
+          : [],
 
         // Public information
         isPublic: consumable.isPublic || false,
@@ -632,7 +639,7 @@ export default function NewConsumablePage() {
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-white">
               <div className="flex items-center space-x-2">
-                <MapPin className="w-5 h-5 text-orange-600" />
+                <MapPin className="w-5 h-5 text-red-600" />
                 <CardTitle className="text-lg font-semibold text-slate-900">
                   Location Information
                 </CardTitle>
@@ -673,6 +680,28 @@ export default function NewConsumablePage() {
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Accessories */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Package className="w-5 h-5 text-orange-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Accessories
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 bg-white">
+              <AccessoriesEditor
+                value={consumable.accessories}
+                onChange={(next) =>
+                  setConsumable((prev) => ({ ...prev, accessories: next }))
+                }
+                disabled={saving}
+                itemLabel="consumable"
+              />
             </CardContent>
           </Card>
 

@@ -16,6 +16,7 @@ import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Badge } from "../ui/badge";
+import { Checkbox } from "../ui/checkbox";
 import {
   Calendar,
   Clock,
@@ -30,6 +31,8 @@ import {
   Circle,
   CheckCircle2,
   Eye,
+  MapPin,
+  Filter,
 } from "lucide-react";
 import {
   assetsService,
@@ -40,7 +43,15 @@ import { assetImageService } from "../../lib/appwrite/image-service.js";
 import { getCurrentStaff } from "../../lib/utils/auth.js";
 import { ENUMS } from "../../lib/appwrite/config.js";
 import { validateRequestDates } from "../../lib/utils/validation.js";
+import { notifyRequestCreated } from "../../lib/services/approval-notifications.js";
 import { formatCategory } from "../../lib/utils/mappings.js";
+import { formatSubcategory, assetMatchesSubcategory, getSubcategoriesForCategory } from "../../lib/constants/asset-subcategories.js";
+import {
+  isApronItem,
+  detectApronColor,
+  getApronColorChoices,
+  apronCartKey,
+} from "../../lib/constants/apron-colors.js";
 import { Query } from "appwrite";
 import { useOrgTheme } from "../providers/org-theme-provider";
 import { getConsumableCategoriesForOrg } from "../../lib/constants/consumable-categories.js";
@@ -72,6 +83,7 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [subcategoryFilter, setSubcategoryFilter] = useState("all");
   const [sortOption, setSortOption] = useState("name-asc");
   const [projectCatalog, setProjectCatalog] = useState([]);
   const { orgCode, theme } = useOrgTheme();
@@ -82,8 +94,6 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
   const viewPathBase = isConsumableRequest ? "/consumables" : "/assets";
   const isNrepOrg = useMemo(() => orgCode?.toUpperCase() === "NREP", [orgCode]);
   const mutedBg = theme?.colors?.muted || "rgba(14, 99, 112, 0.08)";
-  const highlightColor =
-    theme?.colors?.highlight || "var(--org-highlight, #f7901e)";
   const projectLookup = useMemo(() => {
     const map = new Map();
     (projectCatalog || []).forEach((project) => {
@@ -158,6 +168,8 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
       name: doc.name || "Unnamed Item",
       tag: doc.assetTag || doc.identifier || "",
       category: doc.category || "",
+      subcategory: doc.subcategory || "",
+      accessories: Array.isArray(doc.accessories) ? doc.accessories : [],
       location:
         doc.locationName ||
         doc.roomOrArea ||
@@ -254,6 +266,28 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
     return Object.values(ENUMS.CATEGORY).sort();
   }, [isConsumableRequest, orgCode]);
 
+  // Prefer predefined subcategory lists for the selected category so users can
+  // filter even when older assets only encode the type in the name.
+  const subcategoryOptions = useMemo(() => {
+    if (isConsumableRequest || categoryFilter === "all") return [];
+    const predefined = getSubcategoriesForCategory(categoryFilter);
+    if (predefined.length > 0) {
+      return predefined.map((opt) => opt.value);
+    }
+    const values = new Set();
+    availableItems.forEach((item) => {
+      if (item.category === categoryFilter && item.subcategory) {
+        values.add(item.subcategory);
+      }
+    });
+    return Array.from(values).sort();
+  }, [availableItems, categoryFilter, isConsumableRequest]);
+
+  // Reset the subcategory filter whenever the category changes.
+  useEffect(() => {
+    setSubcategoryFilter("all");
+  }, [categoryFilter]);
+
   const statuses = useMemo(() => {
     if (isConsumableRequest) {
       // For consumables, show all consumable statuses
@@ -323,6 +357,12 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
         }
       }
 
+      if (!isConsumableRequest && subcategoryFilter !== "all") {
+        if (!assetMatchesSubcategory(item, subcategoryFilter)) {
+          return false;
+        }
+      }
+
       if (statusFilter !== "all") {
         if (!item.status || item.status !== statusFilter) {
           return false;
@@ -380,6 +420,7 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
   }, [
     availableItems,
     categoryFilter,
+    subcategoryFilter,
     statusFilter,
     projectFilter,
     searchTerm,
@@ -393,44 +434,122 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const getCartKey = (item) => item.cartKey || item.id;
+
+  const findCatalogItemForColor = (color) => {
+    return availableItems.find((candidate) => {
+      if (!isApronItem(candidate)) return false;
+      const detected = detectApronColor(candidate);
+      if (detected?.key === color.key) return true;
+      return color.pattern.test(
+        `${candidate.name || ""} ${candidate.subcategory || ""}`
+      );
+    });
+  };
+
   const handleItemToggle = (item) => {
     setSelectedItems((prev) => {
-      const exists = prev.find((selected) => selected.id === item.id);
+      const detected = isApronItem(item) ? detectApronColor(item) : null;
+      const cartKey = detected
+        ? apronCartKey(item.id, detected.key)
+        : item.id;
+      const exists = prev.find((selected) => getCartKey(selected) === cartKey);
       if (exists) {
-        return prev.filter((selected) => selected.id !== item.id);
+        return prev.filter((selected) => getCartKey(selected) !== cartKey);
       }
 
       return [
         ...prev,
         {
           ...item,
+          cartKey,
+          colorKey: detected?.key || null,
+          colorLabel: detected?.label || null,
           quantity: isConsumableRequest ? 1 : undefined,
           note: "",
+          selectedAccessories: [],
         },
       ];
     });
   };
 
-  const handleQuantityChange = (itemId, delta) => {
+  const handleAddApronColor = (sourceItem, color) => {
+    const sibling = findCatalogItemForColor(color);
+    const base = sibling || sourceItem;
+    const cartKey = apronCartKey(base.id, color.key);
+
+    setSelectedItems((prev) => {
+      if (prev.some((item) => getCartKey(item) === cartKey)) {
+        return prev;
+      }
+
+      const baseName = String(base.name || "Aprons")
+        .replace(/\s*\([^)]*\)\s*$/, "")
+        .trim();
+      const alreadyNamed = color.pattern.test(base.name || "");
+
+      return [
+        ...prev,
+        {
+          ...base,
+          cartKey,
+          colorKey: color.key,
+          colorLabel: color.label,
+          name: alreadyNamed ? base.name : `${baseName} (${color.label})`,
+          quantity: 1,
+          note: "",
+          selectedAccessories: [],
+        },
+      ];
+    });
+  };
+
+  const handleAccessoryToggle = (itemKey, accessory) => {
+    setSelectedItems((prev) =>
+      prev.map((item) => {
+        if (getCartKey(item) !== itemKey) return item;
+        const current = item.selectedAccessories || [];
+        const exists = current.includes(accessory);
+        return {
+          ...item,
+          selectedAccessories: exists
+            ? current.filter((a) => a !== accessory)
+            : [...current, accessory],
+        };
+      })
+    );
+  };
+
+  const handleQuantityChange = (itemKey, delta) => {
     if (!isConsumableRequest) return;
     setSelectedItems((prev) =>
       prev.map((item) => {
-        if (item.id !== itemId) return item;
+        if (getCartKey(item) !== itemKey) return item;
         const max = item.currentStock ?? Number.POSITIVE_INFINITY;
-        const next = Math.max(1, Math.min(max, (item.quantity || 1) + delta));
+        // Shared stock across color lines of the same catalog id
+        const others = prev
+          .filter(
+            (other) =>
+              other.id === item.id && getCartKey(other) !== itemKey
+          )
+          .reduce((sum, other) => sum + (other.quantity || 1), 0);
+        const room = Math.max(1, max - others);
+        const next = Math.max(1, Math.min(room, (item.quantity || 1) + delta));
         return { ...item, quantity: next };
       })
     );
   };
 
-  const handleRemoveItem = (itemId) => {
-    setSelectedItems((prev) => prev.filter((item) => item.id !== itemId));
+  const handleRemoveItem = (itemKey) => {
+    setSelectedItems((prev) =>
+      prev.filter((item) => getCartKey(item) !== itemKey)
+    );
   };
 
-  const handleItemNoteChange = (itemId, value) => {
+  const handleItemNoteChange = (itemKey, value) => {
     setSelectedItems((prev) =>
       prev.map((item) =>
-        item.id === itemId
+        getCartKey(item) === itemKey
           ? {
               ...item,
               note: value,
@@ -513,13 +632,22 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
       }
 
       if (isConsumableRequest) {
+        const totalsById = new Map();
+        selectedItems.forEach((item) => {
+          totalsById.set(
+            item.id,
+            (totalsById.get(item.id) || 0) + (item.quantity || 1)
+          );
+        });
         const overLimit = selectedItems.find((item) => {
-          if (item.currentStock === null) return false;
-          return (item.quantity || 1) > item.currentStock;
+          if (item.currentStock === null || item.currentStock === undefined) {
+            return false;
+          }
+          return (totalsById.get(item.id) || 0) > item.currentStock;
         });
         if (overLimit) {
           throw new Error(
-            `${overLimit.name} has only ${overLimit.currentStock} in stock. Adjust the quantity before submitting.`
+            `${overLimit.name} has only ${overLimit.currentStock} in stock across all colors. Adjust the quantities before submitting.`
           );
         }
       }
@@ -533,18 +661,61 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
           return `${details}: ${item.note.trim()}`;
         });
 
+      // Accessories a requester attached, kept both structured (requestedAccessories)
+      // and as readable lines in the purpose so they show up everywhere.
+      const accessoryLines = selectedItems
+        .filter(
+          (item) =>
+            Array.isArray(item.selectedAccessories) &&
+            item.selectedAccessories.length > 0
+        )
+        .map((item) => {
+          const details = item.tag ? `${item.name} (${item.tag})` : item.name;
+          return `${details} accessories: ${item.selectedAccessories.join(", ")}`;
+        });
+
+      // Apron color breakdown (green / orange / cream, etc.)
+      const apronColorGroups = new Map();
+      selectedItems.forEach((item) => {
+        if (!isApronItem(item)) return;
+        const label =
+          item.colorLabel || detectApronColor(item)?.label || null;
+        if (!label) return;
+        const list = apronColorGroups.get(item.id) || [];
+        list.push(`${label} × ${item.quantity || 1}`);
+        apronColorGroups.set(item.id, list);
+      });
+      const apronColorLines = [];
+      apronColorGroups.forEach((parts, catalogId) => {
+        const sample = selectedItems.find((i) => i.id === catalogId);
+        const baseName = String(sample?.name || "Aprons")
+          .replace(/\s*\([^)]*\)\s*$/, "")
+          .trim();
+        apronColorLines.push(`${baseName} colors: ${parts.join(", ")}`);
+      });
+
+      const requestedAccessories = [...accessoryLines, ...apronColorLines];
+
+      const purposeLines = [...itemNotes, ...accessoryLines, ...apronColorLines];
+
       const requestData = {
         requesterStaffId: staff.$id,
-        purpose: itemNotes.length
-          ? itemNotes.map((line) => `- ${line}`).join("\n")
+        purpose: purposeLines.length
+          ? purposeLines.map((line) => `- ${line}`).join("\n")
           : "Request submitted",
         issueDate: new Date(formData.issueDate).toISOString(),
         expectedReturnDate: new Date(formData.expectedReturnDate).toISOString(),
         requestedItems: requestedItemIds,
+        requestedAccessories,
         status: ENUMS.REQUEST_STATUS.PENDING,
+        approvalStage: ENUMS.APPROVAL_STAGE.L1,
       };
 
-      await assetRequestsService.create(requestData);
+      const createdRequest = await assetRequestsService.create(requestData);
+
+      // Notify first-level (L1) approvers. Best-effort; never blocks submission.
+      await notifyRequestCreated(createdRequest, staff, selectedItems);
+
       router.push("/requests");
     } catch (submitError) {
       setError(submitError.message || "Failed to submit request");
@@ -706,9 +877,17 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
             </div>
           ) : (
             <div className="space-y-4">
-              {selectedItems.map((item) => (
+              {selectedItems.map((item) => {
+                const itemKey = getCartKey(item);
+                const showApronColors =
+                  isConsumableRequest && isApronItem(item);
+                const apronChoices = showApronColors
+                  ? getApronColorChoices(item)
+                  : [];
+
+                return (
                 <div
-                  key={item.id}
+                  key={itemKey}
                   className="flex flex-col sm:flex-row sm:items-start gap-4 border border-gray-200 rounded-xl p-4 bg-white shadow-sm"
                 >
                   <div className="w-full sm:w-24 sm:h-24 h-40 rounded-lg overflow-hidden"
@@ -749,6 +928,17 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
                               {formatCategory(item.category)}
                             </Badge>
                           )}
+                          {item.subcategory && (
+                            <Badge className="bg-gray-100 text-gray-700 border border-gray-200">
+                              {formatSubcategory(item.subcategory)}
+                            </Badge>
+                          )}
+                          {(item.colorLabel ||
+                            detectApronColor(item)?.label) && (
+                            <Badge className="bg-amber-50 text-amber-800 border border-amber-200">
+                              {item.colorLabel || detectApronColor(item).label}
+                            </Badge>
+                          )}
                           {item.location && (
                             <Badge className="bg-gray-50 text-gray-600 border border-gray-200">
                               {item.location}
@@ -759,7 +949,7 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
                       <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => handleRemoveItem(item.id)}
+                        onClick={() => handleRemoveItem(itemKey)}
                         className="text-red-600 hover:text-red-700"
                       >
                         <X className="w-4 h-4" />
@@ -778,7 +968,7 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
                               : "Available")}
                       </Badge>
                       {isConsumableRequest && item.currentStock !== null && (
-                        <Badge className="bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 border border-emerald-200">
+                        <Badge className="bg-[var(--org-highlight)] text-white border border-[var(--org-highlight-dark)]/30">
                           In stock: {item.currentStock}
                         </Badge>
                       )}
@@ -794,7 +984,7 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => handleQuantityChange(item.id, -1)}
+                            onClick={() => handleQuantityChange(itemKey, -1)}
                             disabled={item.quantity <= 1}
                           >
                             <Minus className="w-4 h-4" />
@@ -806,10 +996,15 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => handleQuantityChange(item.id, 1)}
+                            onClick={() => handleQuantityChange(itemKey, 1)}
                             disabled={
                               item.currentStock !== null &&
-                              item.quantity >= item.currentStock
+                              selectedItems
+                                .filter((s) => s.id === item.id)
+                                .reduce(
+                                  (sum, s) => sum + (s.quantity || 1),
+                                  0
+                                ) >= item.currentStock
                             }
                           >
                             <Plus className="w-4 h-4" />
@@ -824,13 +1019,89 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
                                   </div>
                                 )}
 
+                    {showApronColors && (
+                      <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                        <Label className="text-sm font-medium text-gray-800">
+                          Apron colors for the field
+                        </Label>
+                        <p className="text-xs text-gray-600">
+                          Add green, orange, or cream — each color is added to
+                          your request cart with its own quantity.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {apronChoices.map((color) => {
+                            const inCart = selectedItems.some((s) => {
+                              if (s.colorKey === color.key) return true;
+                              const detected = detectApronColor(s);
+                              return (
+                                isApronItem(s) && detected?.key === color.key
+                              );
+                            });
+                            return (
+                              <Button
+                                key={color.key}
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={inCart}
+                                onClick={() => handleAddApronColor(item, color)}
+                                className={
+                                  inCart
+                                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                    : "border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                                }
+                              >
+                                <Plus className="w-3.5 h-3.5 mr-1" />
+                                {inCart
+                                  ? `${color.label} added`
+                                  : `Add ${color.label}`}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {!isConsumableRequest &&
+                      Array.isArray(item.accessories) &&
+                      item.accessories.length > 0 && (
+                        <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                          <Label className="text-sm font-medium text-gray-700">
+                            Attach accessories
+                          </Label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {item.accessories.map((accessory) => {
+                              const checked = (item.selectedAccessories || []).includes(
+                                accessory
+                              );
+                              return (
+                                <label
+                                  key={accessory}
+                                  className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={() =>
+                                      handleAccessoryToggle(itemKey, accessory)
+                                    }
+                                  />
+                                  <span>{accessory}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                     <div className="space-y-2">
                       <Label className="text-sm font-medium text-gray-700">
                         Purpose for this {itemLabel.toLowerCase()}
                       </Label>
                       <Textarea
                         value={item.note || ""}
-                        onChange={(e) => handleItemNoteChange(item.id, e.target.value)}
+                        onChange={(e) =>
+                          handleItemNoteChange(itemKey, e.target.value)
+                        }
                         placeholder={`Why do you need ${item.name}?`}
                         rows={3}
                         className="border-gray-300 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 transition-all duration-200"
@@ -838,7 +1109,8 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
                               </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -875,53 +1147,147 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
       </div>
 
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DialogContent className="max-w-none w-full md:w-[70rem] lg:w-[76rem] xl:w-[80rem] max-h-[85vh]">
-          <DialogHeader>
-            <DialogTitle>Select {itemLabelPlural}</DialogTitle>
-            <DialogDescription>
-              Browse available {itemLabelPlural.toLowerCase()} and add them to your request cart.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-none w-full md:w-[70rem] lg:w-[76rem] xl:w-[80rem] max-h-[85vh] overflow-hidden p-0 gap-0 border-slate-200">
+          <div className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-r from-[var(--org-primary)] via-[var(--org-primary-dark)] to-[var(--org-highlight)] px-6 py-5 text-white">
+            <div className="flex items-start justify-between gap-4">
+              <DialogHeader className="space-y-1 border-0 p-0 text-left">
+                <DialogTitle className="text-xl font-semibold tracking-tight text-white">
+                  Select {itemLabelPlural}
+                </DialogTitle>
+                <DialogDescription className="text-sm text-white/90">
+                  Browse available {itemLabelPlural.toLowerCase()} and add them to your request cart.
+                </DialogDescription>
+              </DialogHeader>
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                aria-label="Close"
+                className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white transition-colors hover:bg-white/25"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
+          </div>
 
-          <div className="space-y-5">
-            <div className="sticky top-0 z-30 -mx-1 md:-mx-2 lg:-mx-3">
-              <div className="rounded-3xl border border-[var(--org-primary)]/10 bg-white/90 backdrop-blur-sm shadow-lg p-5">
-                <div className="flex flex-wrap items-end gap-4">
-                  <div className="flex-1 min-w-[240px]">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1 block">
-                      Search
-                    </Label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <Input
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder={`Search ${itemLabelPlural.toLowerCase()} by name, tag, or location...`}
-                        className="pl-9 h-11 rounded-full border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20"
-                      />
-                    </div>
+          <div className="space-y-4 bg-[var(--org-background,#f8fafc)] px-5 py-4 sm:px-6">
+            {/* Filters */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2 text-slate-700">
+                <Filter className="h-4 w-4 text-[var(--org-primary)]" />
+                <span className="text-sm font-semibold">Search & filter</span>
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-[220px] flex-1">
+                  <Label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Search
+                  </Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder={`Search ${itemLabelPlural.toLowerCase()} by name, tag, or location...`}
+                      className="h-10 rounded-xl border-slate-200 bg-slate-50/80 pl-9 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20"
+                    />
                   </div>
+                </div>
 
-                  {/* Project filter only for NREP (RETC doesn't use projects) */}
-                  {isNrepOrg && projectOptions.length > 0 && (
-                    <div className="w-full sm:w-[200px]">
-                      <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1 block">
-                        Project
+                {isNrepOrg && projectOptions.length > 0 && (
+                  <div className="w-full sm:w-[170px]">
+                    <Label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Project
+                    </Label>
+                    <Select value={projectFilter} onValueChange={setProjectFilter}>
+                      <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50/80 px-3 text-sm text-slate-700">
+                        <span className="flex-1 truncate text-left">
+                          {projectFilter === "all"
+                            ? "All Projects"
+                            : projectOptions.find((project) => project.id === projectFilter)?.label ||
+                              "All Projects"}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="all">All Projects</SelectItem>
+                        {projectOptions.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="w-full sm:w-[160px]">
+                  <Label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Status
+                  </Label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50/80 px-3 text-sm text-slate-700">
+                      <span className="flex-1 truncate text-left">
+                        {statusFilter === "all"
+                          ? "All Statuses"
+                          : statusFilter.replace(/_/g, " ")}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {statuses.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status.replace(/_/g, " ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="w-full sm:w-[170px]">
+                  <Label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Category
+                  </Label>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50/80 px-3 text-sm text-slate-700">
+                      <span className="flex-1 truncate text-left">
+                        {categoryFilter === "all"
+                          ? "All Categories"
+                          : formatCategory(categoryFilter)}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {formatCategory(category)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {!isConsumableRequest &&
+                  categoryFilter !== "all" &&
+                  subcategoryOptions.length > 0 && (
+                    <div className="w-full sm:w-[170px]">
+                      <Label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Subcategory
                       </Label>
-                      <Select value={projectFilter} onValueChange={setProjectFilter}>
-                        <SelectTrigger className="h-11 rounded-full border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 px-4 text-sm font-medium text-gray-600">
-                          <span className="truncate text-left flex-1">
-                            {projectFilter === "all"
-                              ? "All Projects"
-                              : projectOptions.find((project) => project.id === projectFilter)?.label ||
-                                "All Projects"}
+                      <Select
+                        value={subcategoryFilter}
+                        onValueChange={setSubcategoryFilter}
+                      >
+                        <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50/80 px-3 text-sm text-slate-700">
+                          <span className="flex-1 truncate text-left">
+                            {subcategoryFilter === "all"
+                              ? "All Subcategories"
+                              : formatSubcategory(subcategoryFilter)}
                           </span>
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
-                          <SelectItem value="all">All Projects</SelectItem>
-                          {projectOptions.map((project) => (
-                            <SelectItem key={project.id} value={project.id}>
-                              {project.label}
+                          <SelectItem value="all">All Subcategories</SelectItem>
+                          {subcategoryOptions.map((sub) => (
+                            <SelectItem key={sub} value={sub}>
+                              {formatSubcategory(sub)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -929,111 +1295,71 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
                     </div>
                   )}
 
-                  {/* Status filter - always show all available statuses */}
-                  <div className="w-full sm:w-[200px]">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1 block">
-                      Status
-                    </Label>
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="h-11 rounded-full border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 px-4 text-sm font-medium text-gray-600">
-                        <span className="truncate text-left flex-1">
-                          {statusFilter === "all"
-                            ? "All Statuses"
-                            : statusFilter.replace(/_/g, " ")}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        {statuses.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {status.replace(/_/g, " ")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Category filter - always show all available categories */}
-                  <div className="w-full sm:w-[200px]">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1 block">
-                      Category
-                    </Label>
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger className="h-11 rounded-full border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 px-4 text-sm font-medium text-gray-600">
-                        <span className="truncate text-left flex-1">
-                          {categoryFilter === "all"
-                            ? "All Categories"
-                            : formatCategory(categoryFilter)}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="all">All Categories</SelectItem>
-                        {categories.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {formatCategory(category)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="w-full sm:w-auto sm:ml-auto">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setSearchTerm("");
-                        setCategoryFilter("all");
-                        setStatusFilter("all");
-                        setProjectFilter("all");
-                        setSortOption("name-asc");
-                      }}
-                      className="h-11 rounded-full border-gray-200 text-gray-600 hover:bg-gray-100 px-6 w-full sm:w-auto"
-                    >
-                      Clear Filters
-                    </Button>
-                  </div>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setCategoryFilter("all");
+                    setSubcategoryFilter("all");
+                    setStatusFilter("all");
+                    setProjectFilter("all");
+                    setSortOption("name-asc");
+                  }}
+                  className="h-10 rounded-xl border-slate-200 px-4 text-slate-600 hover:bg-slate-50"
+                >
+                  Clear
+                </Button>
               </div>
             </div>
 
-            <div className="max-h-[560px] overflow-y-auto pr-1">
+            {/* Item grid */}
+            <div className="max-h-[52vh] overflow-y-auto pr-1">
               {loadingItems ? (
-                <div className="flex items-center justify-center py-12 text-gray-500">
+                <div className="flex items-center justify-center py-16 text-slate-500">
                   Loading {itemLabelPlural.toLowerCase()}...
                 </div>
               ) : filteredItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center space-y-3 text-gray-500">
-                  <PrimaryIcon className="w-10 h-10 text-[var(--org-primary)]/60" />
+                <div className="flex flex-col items-center justify-center space-y-3 rounded-2xl border border-dashed border-slate-200 bg-white py-16 text-center text-slate-500">
+                  <PrimaryIcon className="h-10 w-10 text-[var(--org-primary)]/50" />
                   <p className="text-sm">
                     No {itemLabelPlural.toLowerCase()} match your current filters.
                   </p>
                 </div>
               ) : (
-                <div
-                  className="grid gap-6"
-                  style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}
-                >
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {filteredItems.map((item) => {
                     const isSelected = selectedItems.some(
                       (selected) => selected.id === item.id
                     );
+                    const statusLabel = item.status
+                      ? isConsumableRequest
+                        ? formatCategory(item.status)
+                        : item.status.replace(/_/g, " ")
+                      : isConsumableRequest
+                      ? "In Stock"
+                      : "Available";
+                    const isAvailable =
+                      !item.status ||
+                      item.status === "AVAILABLE" ||
+                      item.status === "IN_STOCK";
+
                     return (
                       <div
                         key={item.id}
-                        className={`group relative flex h-full flex-col justify-between rounded-3xl border bg-white/95 p-5 transition-all duration-300 shadow-[0_18px_35px_-22px_rgba(14,40,50,0.55)] hover:-translate-y-1 hover:shadow-[0_26px_45px_-25px_rgba(14,40,50,0.6)] ${
+                        className={`group flex h-full flex-col overflow-hidden rounded-2xl border bg-white transition-colors duration-200 ${
                           isSelected
-                            ? "border-[var(--org-primary)]/60 ring-1 ring-[var(--org-primary)]/20"
-                            : "border-gray-200/80 hover:border-[var(--org-primary)]/35"
+                            ? "border-[var(--org-highlight)] ring-1 ring-[var(--org-highlight)]/30"
+                            : "border-slate-200 hover:border-[var(--org-primary)]/35"
                         }`}
                       >
-                        <div className="flex items-start gap-4">
+                        <div className="flex items-start gap-3 border-b border-slate-100 p-4">
                           <div
-                            className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-[0_8px_20px_-12px_rgba(15,45,55,0.4)]"
+                            className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl"
                             style={{
                               background: item.imageUrl
-                                ? `linear-gradient(150deg, ${mutedBg}, #ffffff)`
-                                : `linear-gradient(150deg, ${mutedBg}, rgba(255,255,255,0.95))`,
+                                ? undefined
+                                : "color-mix(in srgb, var(--org-primary) 12%, white)",
                             }}
                           >
                             {item.imageUrl && !isConsumableRequest ? (
@@ -1043,94 +1369,98 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
                                 className="h-full w-full object-cover"
                               />
                             ) : (
-                              <span className="text-xl font-semibold text-[var(--org-primary)]">
+                              <span className="text-base font-semibold text-[var(--org-primary-dark)]">
                                 {item.fallbackInitial}
                               </span>
                             )}
-                            <div className="absolute inset-0 rounded-2xl border border-white/50" />
                           </div>
 
-                          <div className="flex-1 space-y-3">
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
-                              <div className="space-y-1">
-                                <h4 className="text-base font-semibold text-gray-900 leading-tight">
+                              <div className="min-w-0">
+                                <h4 className="truncate text-[15px] font-semibold text-slate-700">
                                   {item.name}
                                 </h4>
                                 {item.tag && (
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                                  <p className="mt-0.5 truncate text-xs text-slate-500">
                                     {item.tag}
                                   </p>
                                 )}
                               </div>
-                              <Badge className="rounded-full bg-[var(--org-primary)]/12 text-[var(--org-primary)] border border-[var(--org-primary)]/20 px-3 py-1">
-                                {item.status 
-                                  ? (isConsumableRequest 
-                                      ? formatCategory(item.status) 
-                                      : item.status.replace(/_/g, " "))
-                                  : (isConsumableRequest 
-                                      ? "In Stock" 
-                                      : "Available")}
-                              </Badge>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-gray-600">
-                              {item.category && (
-                                <Badge
-                                  className="rounded-full border px-3 py-1 shadow-sm"
-                                  style={{
-                                    background: `linear-gradient(135deg, ${highlightColor}22, ${highlightColor}14)`,
-                                    color: highlightColor,
-                                    borderColor: `${highlightColor}40`,
-                                  }}
-                                >
-                                  {formatCategory(item.category)}
-                                </Badge>
-                              )}
-                              {item.location && (
-                                <Badge className="rounded-full bg-white text-gray-600 border border-gray-200 px-3 py-1">
-                                  {item.location}
-                                </Badge>
-                              )}
-                              {isConsumableRequest && item.currentStock !== null && (
-                                <Badge className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1">
-                                  In stock: {item.currentStock}
-                                </Badge>
-                              )}
+                              <span
+                                className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                  isAvailable
+                                    ? "bg-[var(--org-primary)]/12 text-[var(--org-primary-dark)]"
+                                    : "bg-[var(--org-highlight)]/20 text-[var(--org-highlight-dark)]"
+                                }`}
+                              >
+                                {statusLabel}
+                              </span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                          <span
-                            className="text-xs font-medium uppercase tracking-wide"
-                            style={{ color: highlightColor }}
-                          >
-                            {itemLabel}
-                          </span>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              asChild
-                              type="button"
-                              variant="outline"
-                              className="flex items-center gap-2 rounded-full border-gray-200 text-gray-600 hover:bg-gray-100"
-                            >
-                              <Link href={`${viewPathBase}/${item.id}`}>
-                                <Eye className="w-4 h-4" />
+                        <div className="flex flex-1 flex-col gap-3 p-4">
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.category && (
+                              <span className="rounded-md bg-[var(--org-primary)]/10 px-2 py-1 text-[11px] font-medium text-[var(--org-primary-dark)]">
+                                {formatCategory(item.category)}
+                              </span>
+                            )}
+                            {item.subcategory && (
+                              <span className="rounded-md bg-[var(--org-highlight)]/15 px-2 py-1 text-[11px] font-medium text-[var(--org-highlight-dark)]">
+                                {formatSubcategory(item.subcategory)}
+                              </span>
+                            )}
+                            {item.accessories && item.accessories.length > 0 && (
+                              <span className="rounded-md bg-[var(--org-primary)]/10 px-2 py-1 text-[11px] font-medium text-[var(--org-primary-dark)]">
+                                {item.accessories.length} accessor
+                                {item.accessories.length === 1 ? "y" : "ies"}
+                              </span>
+                            )}
+                            {isConsumableRequest && item.currentStock !== null && (
+                              <span className="rounded-md bg-[var(--org-highlight)]/15 px-2 py-1 text-[11px] font-medium text-[var(--org-highlight-dark)]">
+                                Stock: {item.currentStock}
+                              </span>
+                            )}
+                          </div>
+
+                          {item.location && (
+                            <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                              <MapPin className="h-3.5 w-3.5 shrink-0 text-red-600" />
+                              <span className="truncate">{item.location}</span>
+                            </div>
+                          )}
+
+                          <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--org-primary)]">
+                              {itemLabel}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`${viewPathBase}/${item.id}?from=request&type=${
+                                  isConsumableRequest ? "consumable" : "asset"
+                                }`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
                                 View
-                              </Link>
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={isSelected ? "secondary" : "default"}
-                              onClick={() => handleItemToggle(item)}
-                              className={
-                                isSelected
-                                  ? "bg-white text-[var(--org-primary)] border border-[var(--org-primary)]/40 hover:bg-[var(--org-primary)]/10"
-                                  : "bg-org-gradient text-white shadow-lg hover:shadow-xl"
-                              }
-                            >
-                              {isSelected ? "Remove" : "Add"}
-                            </Button>
+                              </a>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => handleItemToggle(item)}
+                                className={
+                                  isSelected
+                                    ? "h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                    : "h-9 rounded-lg bg-[var(--org-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--org-primary-dark)]"
+                                }
+                              >
+                                {isSelected ? "Remove" : "Add"}
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1140,12 +1470,14 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
               )}
             </div>
 
-            <DialogFooter className="flex justify-end">
+            <DialogFooter className="border-t border-slate-200 bg-white px-1 py-3 sm:justify-between">
+              <p className="hidden text-sm text-slate-500 sm:block">
+                {selectedItems.length} selected in cart
+              </p>
               <Button
                 type="button"
-                variant="outline"
                 onClick={() => setPickerOpen(false)}
-                className="rounded-full px-6"
+                className="rounded-xl bg-org-gradient px-6 text-white shadow-sm hover:opacity-95"
               >
                 Done
               </Button>

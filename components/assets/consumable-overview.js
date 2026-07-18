@@ -9,6 +9,7 @@ import {
   departmentsService,
   staffService,
 } from "../../lib/appwrite/provider.js";
+import { getConsumableRecipients } from "../../lib/utils/holders.js";
 import { APPWRITE_CONFIG, BUCKETS } from "../../lib/appwrite/config.js";
 import {
   getStatusBadgeColor,
@@ -33,6 +34,7 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
   const [department, setDepartment] = useState(null);
   const [custodian, setCustodian] = useState(null);
   const [staff, setStaff] = useState(null);
+  const [recipients, setRecipients] = useState([]);
 
   useEffect(() => {
     loadRelatedData();
@@ -55,9 +57,18 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
         );
         setCustodian(custodianData);
       }
+
+      // Who has received units of this consumable (recent first).
+      const recipientList = await getConsumableRecipients(consumable.$id);
+      setRecipients(recipientList);
     } catch (error) {
       console.error("Failed to load related data:", error);
     }
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "";
+    return new Date(dateString).toLocaleString();
   };
 
   const formatDate = (dateString) => {
@@ -74,7 +85,7 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
 
   const canManageConsumables =
     staff &&
-    permissions.canManageAssets(staff) &&
+    permissions.canManageConsumables(staff) &&
     getCurrentViewMode() === "admin";
 
   // Parse images
@@ -292,6 +303,61 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
             <div>
               <h4 className="font-semibold text-gray-700 mb-1">Room/Area</h4>
               <p className="text-sm text-gray-600">{consumable.roomOrArea}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Accessories */}
+      {Array.isArray(consumable.accessories) &&
+        consumable.accessories.length > 0 && (
+          <Card className="border-green-200 bg-white lg:col-span-2">
+            <CardHeader className="bg-green-50 border-b border-green-200">
+              <CardTitle className="text-green-800">Accessories</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="flex flex-wrap gap-2">
+                {consumable.accessories.map((accessory, index) => (
+                  <Badge
+                    key={`${accessory}-${index}`}
+                    className="bg-gray-100 text-gray-800 border border-gray-200"
+                  >
+                    {accessory}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+      {/* Recent Recipients - who has received units of this consumable */}
+      <Card className="border-amber-200 bg-white lg:col-span-2">
+        <CardHeader className="bg-amber-50 border-b border-amber-200">
+          <CardTitle className="text-amber-800">
+            Recent Recipients
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {recipients.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No one has been issued this consumable yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {recipients.map((recipient, index) => (
+                <div
+                  key={`${recipient.name}-${recipient.issuedAt}-${index}`}
+                  className="flex items-center justify-between rounded border border-gray-100 bg-gray-50 px-3 py-2"
+                >
+                  <span className="text-sm font-medium text-gray-800">
+                    {recipient.name}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {recipient.quantity > 1 ? `${recipient.quantity} units · ` : ""}
+                    {formatDateTime(recipient.issuedAt)}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

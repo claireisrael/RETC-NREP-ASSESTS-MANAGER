@@ -74,8 +74,13 @@ import {
   Settings,
 } from "lucide-react";
 import {
+  aggregateResolvedItems,
+  formatItemQuantityLabel,
+} from "../../../lib/utils/requested-items.js";
+import {
   assetRequestsService,
   assetsService,
+  assetIssuesService,
   staffService,
   departmentsService,
 } from "../../../lib/appwrite/provider.js";
@@ -85,6 +90,12 @@ import {
 //   notifyRequestRejected,
 // } from "../../../lib/services/notification-triggers.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
+import {
+  notifyL1Approved,
+  notifyFinalApproved,
+  notifyConsumablesIssued,
+  notifyDenied,
+} from "../../../lib/services/approval-notifications.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import { Query } from "appwrite";
 import Link from "next/link";
@@ -284,99 +295,250 @@ export default function RequestQueue() {
     }
   };
 
-  const handleDecision = async (requestId, status, denialReason = null) => {
+  // Resolve the current approval stage, defaulting legacy requests sensibly.
+  const getStage = (request) =>
+    request?.approvalStage ||
+    (request?.status === ENUMS.REQUEST_STATUS.PENDING
+      ? ENUMS.APPROVAL_STAGE.L1
+      : request?.status);
+
+  const handleApprove = async (request) => {
     setDecisionLoading(true);
-    setError(null); // Clear any existing errors
+    setError(null);
     try {
-      // Get the request details first (with resolved assets)
-      const request = enrichedRequests.find((r) => r.$id === requestId);
-      if (!request) {
-        throw new Error("Request not found");
+      if (!request) throw new Error("Request not found");
+
+      // Always resolve requester email (staff list can be incomplete).
+      let requester =
+        staff.find((s) => s.$id === request.requesterStaffId) || null;
+      if (!requester?.email && request.requesterStaffId) {
+        requester = await staffService
+          .get(request.requesterStaffId)
+          .catch(() => null);
       }
 
-      // Get requester details
-      const requester = staff.find((s) => s.$id === request.requesterStaffId);
-      if (!requester) {
-        throw new Error("Requester not found");
+      // Resolve requested items by ID so consumables are included even if
+      // they were missing from the cached assets list.
+      let items = request.resolvedItems || [];
+      if (
+        items.length === 0 &&
+        Array.isArray(request.requestedItems) &&
+        request.requestedItems.length > 0
+      ) {
+        const loaded = await Promise.all(
+          request.requestedItems.map((id) =>
+            assetsService.get(id).catch(() => null)
+          )
+        );
+        items = loaded.filter(Boolean);
       }
 
-      // Get asset details (assuming request has assets array)
-      const asset =
-        request.resolvedItems && request.resolvedItems[0]
-          ? request.resolvedItems[0]
-          : null;
+      const stage = getStage(request);
+      const now = new Date().toISOString();
 
-      // Update the request status - use only fields that exist in the schema
-      const updateData = {
-        status,
-      };
-
-      // Add denial reason if denying
-      if (status === ENUMS.REQUEST_STATUS.DENIED) {
-        if (!denialReason || denialReason.trim() === "") {
-          throw new Error("Please provide a reason for denying this request.");
+      if (stage === ENUMS.APPROVAL_STAGE.L1) {
+        if (!permissions.canApproveL1(currentStaff)) {
+          throw new Error(
+            "You don't have permission to give first-level approval."
+          );
         }
-        // Store denial reason by appending to purpose field (no dedicated field exists in schema)
-        const existingPurpose = request.purpose || "";
-        updateData.purpose = existingPurpose 
-          ? `${existingPurpose}\n\n[Denial Reason: ${denialReason.trim()}]`
-          : `[Denial Reason: ${denialReason.trim()}]`;
-      }
+        const updateData = {
+          status: ENUMS.REQUEST_STATUS.PENDING,
+          approvalStage: ENUMS.APPROVAL_STAGE.L2,
+          l1ApproverStaffId: currentStaff.$id,
+          l1DecisionAt: now,
+        };
+        await assetRequestsService.update(request.$id, updateData, {
+          sendNotification: false,
+        });
+        await notifyL1Approved(
+          { ...request, ...updateData },
+          requester,
+          currentStaff,
+          items
+        );
+        if (!requester?.email) {
+          console.warn(
+            "L1 approved but requester email missing — no user email sent"
+          );
+        }
+      } else if (stage === ENUMS.APPROVAL_STAGE.L2) {
+        if (!permissions.canApproveL2(currentStaff)) {
+          throw new Error("Only a superadmin can give final approval.");
+        }
 
-      // For consumables, automatically issue them when approved
-      if (status === ENUMS.REQUEST_STATUS.APPROVED) {
-        const consumableItems = (request.resolvedItems || []).filter(
+        // Consumables are auto-issued on final approval.
+        const consumableItems = items.filter(
           (item) => item?.itemType === ENUMS.ITEM_TYPE.CONSUMABLE
         );
-
+        const assetItems = items.filter(
+          (item) => item?.itemType !== ENUMS.ITEM_TYPE.CONSUMABLE
+        );
+        let finalStatus = ENUMS.REQUEST_STATUS.APPROVED;
         if (consumableItems.length > 0) {
-          for (const consumable of consumableItems) {
+          // Consumables don't need a return date; only require it when assets remain.
+          if (assetItems.length > 0 && !request.expectedReturnDate) {
+            throw new Error(
+              "This request includes assets and has no expected return date."
+            );
+          }
+          const consumableLines = aggregateResolvedItems(consumableItems);
+          for (const { item: consumable, quantity } of consumableLines) {
+            const qty = Math.max(1, quantity || 1);
             try {
               await assetsService.adjustConsumableStock(
                 consumable.$id,
-                -1, // Reduce stock by 1
+                -qty,
                 currentStaff.$id,
-                `Consumable auto-issued for approved request #${requestId.slice(
+                `Consumable auto-issued for approved request #${request.$id.slice(
                   -8
                 )}`
               );
-            } catch (error) {
+
+              // Record who received the consumable so it shows in the item view.
+              await assetIssuesService.create({
+                requestId: request.$id,
+                assetId: consumable.$id,
+                requesterStaffId: request.requesterStaffId,
+                requesterName: requester?.name || null,
+                quantity: qty,
+                issuedByStaffId: currentStaff.$id,
+                issuedAt: now,
+                dueAt: request.expectedReturnDate || null,
+              });
+            } catch (stockError) {
               console.error(
                 `Failed to adjust stock for ${consumable.name}:`,
-                error
+                stockError
               );
             }
           }
-
-          // Mark request as fulfilled since consumables are automatically issued
-          updateData.status = ENUMS.REQUEST_STATUS.FULFILLED;
+          // Pure consumable requests are fulfilled immediately.
+          if (assetItems.length === 0) {
+            finalStatus = ENUMS.REQUEST_STATUS.FULFILLED;
+          }
         }
-      }
 
-      // Update the request
-      await assetRequestsService.update(requestId, updateData);
+        const updateData = {
+          status: finalStatus,
+          approvalStage: ENUMS.APPROVAL_STAGE.APPROVED,
+          l2ApproverStaffId: currentStaff.$id,
+          l2DecisionAt: now,
+          decisionByStaffId: currentStaff.$id,
+        };
+        await assetRequestsService.update(request.$id, updateData, {
+          sendNotification: false,
+        });
 
-      // Send notification using the new notification triggers
-      const updatedRequest = { ...request, ...updateData };
-      if (status === ENUMS.REQUEST_STATUS.APPROVED) {
-        // TODO: Implement notifyRequestApproved function
-        // await notifyRequestApproved(updatedRequest, currentStaff.$id);
-      } else if (status === ENUMS.REQUEST_STATUS.DENIED) {
-        // TODO: Implement notifyRequestRejected function
-        // await notifyRequestRejected(updatedRequest, currentStaff.$id);
+        // Consumables: send "issued to you" email. Assets: send "approved, awaiting issue".
+        if (finalStatus === ENUMS.REQUEST_STATUS.FULFILLED) {
+          const mail = await notifyConsumablesIssued(
+            { ...request, ...updateData },
+            requester,
+            currentStaff,
+            consumableItems.length > 0 ? consumableItems : items
+          );
+          if (mail?.sent === false) {
+            console.warn("Consumable issued email was not sent:", mail);
+          }
+        } else {
+          const mail = await notifyFinalApproved(
+            { ...request, ...updateData },
+            requester,
+            currentStaff,
+            items
+          );
+          if (mail?.sent === false) {
+            console.warn("Final approval email was not sent:", mail);
+          }
+        }
+      } else {
+        throw new Error("This request is not awaiting approval.");
       }
 
       await loadRequests();
       setSelectedRequest(null);
-      // Close denial dialog if it was open
-      if (status === ENUMS.REQUEST_STATUS.DENIED) {
-        setShowDenialDialog(false);
-        setDenialReason("");
-        setRequestToDeny(null);
-      }
     } catch (error) {
-      setError(error.message || "Failed to update request. Please try again.");
-      console.error("Decision error:", error);
+      setError(error.message || "Failed to approve request. Please try again.");
+      console.error("Approve error:", error);
+    } finally {
+      setDecisionLoading(false);
+    }
+  };
+
+  const handleDeny = async (request, reason) => {
+    setDecisionLoading(true);
+    setError(null);
+    try {
+      if (!request) throw new Error("Request not found");
+      if (!reason || reason.trim() === "") {
+        throw new Error("Please provide a reason for denying this request.");
+      }
+      const requester =
+        staff.find((s) => s.$id === request.requesterStaffId) ||
+        (request.requesterStaffId
+          ? await staffService.get(request.requesterStaffId).catch(() => null)
+          : null);
+      if (!requester?.email) {
+        console.warn(
+          "Denial saved, but requester email was missing — notification skipped"
+        );
+      }
+      const items = request.resolvedItems || [];
+      const stage = getStage(request);
+      const now = new Date().toISOString();
+
+      if (
+        stage === ENUMS.APPROVAL_STAGE.L2 &&
+        !permissions.canApproveL2(currentStaff)
+      ) {
+        throw new Error(
+          "Only a superadmin can act on a request awaiting final approval."
+        );
+      }
+      if (
+        stage === ENUMS.APPROVAL_STAGE.L1 &&
+        !permissions.canApproveL1(currentStaff)
+      ) {
+        throw new Error("You don't have permission to act on this request.");
+      }
+
+      const updateData = {
+        status: ENUMS.REQUEST_STATUS.DENIED,
+        approvalStage: ENUMS.APPROVAL_STAGE.DENIED,
+        decisionNotes: reason.trim(),
+        decisionByStaffId: currentStaff.$id,
+        ...(stage === ENUMS.APPROVAL_STAGE.L2
+          ? { l2ApproverStaffId: currentStaff.$id, l2DecisionAt: now }
+          : { l1ApproverStaffId: currentStaff.$id, l1DecisionAt: now }),
+      };
+      await assetRequestsService.update(request.$id, updateData, {
+        sendNotification: false,
+      });
+      const mailResult = await notifyDenied(
+        { ...request, ...updateData },
+        requester,
+        currentStaff,
+        reason.trim(),
+        items
+      );
+      if (mailResult?.sent === false) {
+        console.warn("Denial email was not sent:", mailResult);
+        setError(
+          `Request denied, but the rejection email could not be sent${
+            mailResult?.error ? `: ${mailResult.error}` : "."
+          } Please tell the requester manually.`
+        );
+      }
+
+      await loadRequests();
+      setSelectedRequest(null);
+      setShowDenialDialog(false);
+      setDenialReason("");
+      setRequestToDeny(null);
+    } catch (error) {
+      setError(error.message || "Failed to deny request. Please try again.");
+      console.error("Deny error:", error);
     } finally {
       setDecisionLoading(false);
     }
@@ -394,7 +556,7 @@ export default function RequestQueue() {
       setError("Please provide a reason for denying this request.");
       return;
     }
-    await handleDecision(requestToDeny.$id, ENUMS.REQUEST_STATUS.DENIED, denialReason);
+    await handleDeny(requestToDeny, denialReason);
   };
 
   const getRequesterName = (requesterStaffId) => {
@@ -411,6 +573,11 @@ export default function RequestQueue() {
 
   // Filter requests based on all filters and active tab
   const filteredRequests = useMemo(() => {
+    const isL1OnlyApprover =
+      currentStaff &&
+      permissions.canApproveL1(currentStaff) &&
+      !permissions.canApproveL2(currentStaff);
+
     const requestsByTab = enrichedRequests.filter((request) =>
       activeTab === "asset"
         ? request.requestType !== "consumable"
@@ -418,6 +585,33 @@ export default function RequestQueue() {
     );
 
     return requestsByTab.filter((request) => {
+      // L1 admins only see requests still awaiting their approval.
+      // Once they approve (moves to L2) or the request is decided, it leaves their queue.
+      if (isL1OnlyApprover) {
+        const stage = getStage(request);
+        if (
+          request.status !== ENUMS.REQUEST_STATUS.PENDING ||
+          stage !== ENUMS.APPROVAL_STAGE.L1
+        ) {
+          return false;
+        }
+      }
+
+      // Superadmins: strict order — do not show L1 requests in the default queue.
+      // They only see items awaiting final (L2) approval, or approved and ready to issue.
+      // Explicit status filters can still surface history.
+      const isSuperAdmin =
+        currentStaff && permissions.canApproveL2(currentStaff);
+      if (isSuperAdmin && selectedStatus === "all") {
+        const stage = getStage(request);
+        const awaitingL2 =
+          request.status === ENUMS.REQUEST_STATUS.PENDING &&
+          stage === ENUMS.APPROVAL_STAGE.L2;
+        const readyToIssue =
+          request.status === ENUMS.REQUEST_STATUS.APPROVED;
+        if (!awaitingL2 && !readyToIssue) return false;
+      }
+
       const resolvedItems = request.resolvedItems || [];
 
       const matchesSearch =
@@ -487,6 +681,7 @@ export default function RequestQueue() {
     selectedPriority,
     dateRange,
     staff,
+    currentStaff,
   ]);
 
   if (loading) {
@@ -650,7 +845,7 @@ export default function RequestQueue() {
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent className="z-30">
-                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="all">Active queue</SelectItem>
                   <SelectItem value={ENUMS.REQUEST_STATUS.PENDING}>
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
@@ -838,9 +1033,19 @@ export default function RequestQueue() {
                             by {getRequesterName(request.requesterStaffId)}
                           </p>
                         </div>
-                        <Badge className={getStatusBadgeColor(request.status)}>
-                          {request.status}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1">
+                          {request.status === ENUMS.REQUEST_STATUS.PENDING ? (
+                            <Badge className="bg-amber-50 text-amber-700 border-amber-200">
+                              {getStage(request) === ENUMS.APPROVAL_STAGE.L2
+                                ? "Awaiting final approval"
+                                : "Awaiting L1 approval"}
+                            </Badge>
+                          ) : (
+                            <Badge className={getStatusBadgeColor(request.status)}>
+                              {request.status}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
 
                       {/* Request Details */}
@@ -864,20 +1069,22 @@ export default function RequestQueue() {
                         </div>
                       </div>
 
-                      {/* Requested Assets */}
+                      {/* Requested Items — name × quantity (not one pill per unit) */}
                       <div className="mb-4">
                         <h4 className="text-sm font-medium text-slate-700 mb-2">
                           Requested Items
                         </h4>
                         <div className="flex flex-wrap gap-2">
-                          {(request.resolvedItems || []).map((item, idx) => (
-                            <Badge
-                              key={`${item?.$id || item?.assetTag || "item"}-${idx}`}
-                              className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100"
-                            >
-                              {item?.name || "Unknown Item"}
-                            </Badge>
-                          ))}
+                          {aggregateResolvedItems(request.resolvedItems || []).map(
+                            ({ item, quantity, id }) => (
+                              <Badge
+                                key={id}
+                                className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100"
+                              >
+                                {formatItemQuantityLabel(item, quantity)}
+                              </Badge>
+                            )
+                          )}
                           {(request.resolvedItems || []).length === 0 && (
                             <span className="text-sm text-gray-500">
                               No items specified
@@ -888,7 +1095,7 @@ export default function RequestQueue() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
                       <Button
                         asChild
                         variant="outline"
@@ -900,37 +1107,52 @@ export default function RequestQueue() {
                         </Link>
                       </Button>
 
-                      {request.status === ENUMS.REQUEST_STATUS.PENDING && (
-                        <>
-                          <Button
-                            size="sm"
-                            disabled={decisionLoading}
-                            onClick={() =>
-                              handleDecision(
-                                request.$id,
-                                ENUMS.REQUEST_STATUS.APPROVED
-                              )
-                            }
-                            className="bg-org-gradient text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
-                          >
-                            {decisionLoading ? (
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                              <CheckCircle className="w-4 h-4 mr-2" />
-                            )}
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            disabled={decisionLoading}
-                            onClick={() => handleDenyClick(request)}
-                            className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
-                          >
-                            <XCircle className="w-4 h-4 mr-2" />
-                            Deny
-                          </Button>
-                        </>
-                      )}
+                      {request.status === ENUMS.REQUEST_STATUS.PENDING &&
+                        (() => {
+                          const stage = getStage(request);
+                          const canAct =
+                            stage === ENUMS.APPROVAL_STAGE.L2
+                              ? permissions.canApproveL2(currentStaff)
+                              : permissions.canApproveL1(currentStaff);
+
+                          if (!canAct) {
+                            return (
+                              <span className="text-sm text-slate-500 self-center px-1">
+                                {stage === ENUMS.APPROVAL_STAGE.L2
+                                  ? "Awaiting final approval by a superadmin"
+                                  : "Awaiting first-level approval"}
+                              </span>
+                            );
+                          }
+
+                          const isFinal = stage === ENUMS.APPROVAL_STAGE.L2;
+                          return (
+                            <>
+                              <Button
+                                size="sm"
+                                disabled={decisionLoading}
+                                onClick={() => handleApprove(request)}
+                                className="bg-org-gradient text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+                              >
+                                {decisionLoading ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                )}
+                                {isFinal ? "Final Approve" : "Approve (L1)"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                disabled={decisionLoading}
+                                onClick={() => handleDenyClick(request)}
+                                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+                              >
+                                <XCircle className="w-4 h-4 mr-2" />
+                                Deny
+                              </Button>
+                            </>
+                          );
+                        })()}
 
                       {request.status === ENUMS.REQUEST_STATUS.APPROVED &&
                         request.requestType !== "consumable" && (
@@ -956,83 +1178,122 @@ export default function RequestQueue() {
 
       {/* Denial Reason Dialog */}
       <Dialog open={showDenialDialog} onOpenChange={setShowDenialDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <XCircle className="w-5 h-5" />
-              Deny Request
-            </DialogTitle>
-            <DialogDescription>
-              Please provide a reason for denying this request. The requester will be notified with this reason.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {requestToDeny && (
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-sm font-medium text-gray-700">Request Details:</p>
-                <p className="text-sm text-gray-600 mt-1">
-                  Request ID: <span className="font-mono">{requestToDeny.$id.slice(-8)}</span>
-                </p>
-                {requestToDeny.resolvedItems && requestToDeny.resolvedItems.length > 0 && (
-                  <p className="text-sm text-gray-600">
-                    Item: {requestToDeny.resolvedItems[0].name}
-                  </p>
-                )}
+        <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden border-0 shadow-none">
+          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+            <div className="px-6 pt-6 pb-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+                  <XCircle className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <DialogTitle className="text-lg font-semibold text-slate-900">
+                    Deny this request?
+                  </DialogTitle>
+                  <DialogDescription className="mt-1 text-sm text-slate-500 leading-relaxed">
+                    The requester will get an email with your reason. This cannot be undone from here.
+                  </DialogDescription>
+                </div>
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="denialReason" className="text-sm font-medium text-gray-700">
-                Denial Reason <span className="text-red-500">*</span>
-              </Label>
-              <Textarea
-                id="denialReason"
-                placeholder="Please explain why this request is being denied..."
-                value={denialReason}
-                onChange={(e) => setDenialReason(e.target.value)}
-                className="min-h-[120px] resize-none"
-                required
-              />
-              <p className="text-xs text-gray-500">
-                This reason will be visible to the requester and included in the notification email.
-              </p>
             </div>
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowDenialDialog(false);
-                setDenialReason("");
-                setRequestToDeny(null);
-                setError("");
-              }}
-              disabled={decisionLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirmDenial}
-              disabled={decisionLoading || !denialReason || denialReason.trim() === ""}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              {decisionLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Denying...
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-4 h-4 mr-2" />
-                  Confirm Denial
-                </>
+
+            <div className="px-6 pb-5 space-y-4">
+              {requestToDeny && (
+                <div
+                  className="rounded-xl px-4 py-3 text-sm"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-background) 85%, white)",
+                    border:
+                      "1px solid color-mix(in srgb, var(--org-primary) 18%, transparent)",
+                  }}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
+                    Request
+                  </p>
+                  <p className="font-mono text-slate-800">
+                    #{requestToDeny.$id.slice(-8).toUpperCase()}
+                  </p>
+                  {(() => {
+                    const lines = aggregateResolvedItems(
+                      requestToDeny.resolvedItems || []
+                    );
+                    if (lines.length === 0) return null;
+                    const first = formatItemQuantityLabel(
+                      lines[0].item,
+                      lines[0].quantity
+                    );
+                    return (
+                      <p className="text-slate-600 mt-0.5 truncate">
+                        {first}
+                        {lines.length > 1
+                          ? ` +${lines.length - 1} more`
+                          : ""}
+                      </p>
+                    );
+                  })()}
+                </div>
               )}
-            </Button>
-          </DialogFooter>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="denialReason"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Reason <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  id="denialReason"
+                  placeholder="e.g. Item already allocated / insufficient stock / not justified for this period…"
+                  value={denialReason}
+                  onChange={(e) => setDenialReason(e.target.value)}
+                  className="min-h-[110px] resize-none rounded-xl border-slate-200 focus-visible:ring-[var(--org-primary)]"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-slate-50 border-t border-slate-100">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDenialDialog(false);
+                  setDenialReason("");
+                  setRequestToDeny(null);
+                  setError("");
+                }}
+                disabled={decisionLoading}
+                className="min-w-[96px]"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDenial}
+                disabled={
+                  decisionLoading ||
+                  !denialReason ||
+                  denialReason.trim() === ""
+                }
+                className="min-w-[140px]"
+              >
+                {decisionLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Denying…
+                  </>
+                ) : (
+                  "Deny request"
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

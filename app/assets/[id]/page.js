@@ -23,6 +23,7 @@ import { AssetActivity } from "../../../components/assets/asset-activity";
 import { AssetCustody } from "../../../components/assets/asset-custody";
 import { assetsService } from "../../../lib/appwrite/provider.js";
 import { assetImageService } from "../../../lib/appwrite/image-service.js";
+import { getAssetHolderName, isAssetHeld } from "../../../lib/utils/holders.js";
 import {
   getCurrentStaff,
   permissions,
@@ -33,7 +34,7 @@ import {
   getConditionBadgeColor,
   formatCategory,
 } from "../../../lib/utils/mappings.js";
-import { ArrowLeft, ImageIcon, Edit3, Package, FileText } from "lucide-react";
+import { ArrowLeft, ImageIcon, Edit3, Package, FileText, UserCheck } from "lucide-react";
 
 export default function AssetDetailPage() {
   const params = useParams();
@@ -41,6 +42,7 @@ export default function AssetDetailPage() {
   const searchParams = useSearchParams();
   const [asset, setAsset] = useState(null);
   const [staff, setStaff] = useState(null);
+  const [holderName, setHolderName] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -58,6 +60,14 @@ export default function AssetDetailPage() {
 
       setAsset(assetData);
       setStaff(currentStaff);
+
+      // Resolve who currently holds the asset (for unavailable assets).
+      if (isAssetHeld(assetData)) {
+        const name = await getAssetHolderName(assetData);
+        setHolderName(name);
+      } else {
+        setHolderName(null);
+      }
     } catch (err) {
       setError("Asset not found or you don't have permission to view it.");
     } finally {
@@ -65,7 +75,17 @@ export default function AssetDetailPage() {
     }
   };
 
+  const openedFromRequest = searchParams?.get("from") === "request";
+
   const handleBack = () => {
+    // Opened from the request cart (via the item "View" link): return to the
+    // request form so the user can continue their request.
+    if (openedFromRequest) {
+      const type = searchParams?.get("type") === "consumable" ? "consumable" : "asset";
+      router.push(`/requests/new?type=${type}`);
+      return;
+    }
+
     // If this detail page was opened from the admin assets screen,
     // the URL will include ?view=admin. In that case, ALWAYS go back
     // to the admin assets management screen, regardless of any other state.
@@ -115,7 +135,7 @@ export default function AssetDetailPage() {
               onClick={handleBack}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Assets
+              {openedFromRequest ? "Back to Request" : "Back to Assets"}
             </Button>
           </div>
         </div>
@@ -152,7 +172,7 @@ export default function AssetDetailPage() {
               onClick={handleBack}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Assets
+              {openedFromRequest ? "Back to Request" : "Back to Assets"}
             </Button>
           </div>
 
@@ -193,6 +213,23 @@ export default function AssetDetailPage() {
               {formatCategory(asset.category)}
             </Badge>
           </div>
+
+          {/* Current Holder banner - shows who has the asset when it's unavailable */}
+          {isAssetHeld(asset) && (
+            <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100">
+                <UserCheck className="h-5 w-5 text-amber-700" />
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                  Currently held by
+                </p>
+                <p className="text-sm font-semibold text-amber-900">
+                  {holderName || "Loading..."}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Asset Details */}
           <div className="text-sm text-gray-600 space-y-1">

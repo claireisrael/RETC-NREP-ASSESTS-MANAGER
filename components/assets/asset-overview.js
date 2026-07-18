@@ -13,6 +13,7 @@ import {
   getConditionBadgeColor,
   formatCategory,
 } from "../../lib/utils/mappings.js";
+import { formatSubcategory } from "../../lib/constants/asset-subcategories.js";
 import {
   getCurrentStaff,
   permissions,
@@ -95,7 +96,7 @@ export function AssetOverview({ asset, onUpdate }) {
             <div>
               <h4 className="font-semibold text-gray-700 mb-1">Subcategory</h4>
               <p className="text-sm bg-green-50 px-3 py-2 rounded border border-green-200">
-                {asset.subcategory}
+                {formatSubcategory(asset.subcategory)}
               </p>
             </div>
           )}
@@ -225,6 +226,27 @@ export function AssetOverview({ asset, onUpdate }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Accessories */}
+      {Array.isArray(asset.accessories) && asset.accessories.length > 0 && (
+        <Card className="lg:col-span-2 border-green-200 bg-white">
+          <CardHeader className="bg-green-50 border-b border-green-200">
+            <CardTitle className="text-green-800">Accessories</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="flex flex-wrap gap-2">
+              {asset.accessories.map((accessory, index) => (
+                <Badge
+                  key={`${accessory}-${index}`}
+                  className="bg-gray-100 text-gray-800 border border-gray-200"
+                >
+                  {accessory}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Public Visibility */}
       {asset.isPublic && (

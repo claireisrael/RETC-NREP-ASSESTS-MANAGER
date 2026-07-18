@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
@@ -220,13 +221,15 @@ export default function LoginPage() {
 
           {/* Content */}
           <div className="relative z-10 flex flex-col justify-center px-16 py-24 text-white">
-            {/* Logo with Glow Effect */}
-            <div className="mb-12">
-              <img
-                src={orgLogo}
-                alt={`${orgName} logo`}
-                className="w-40 h-40 object-contain drop-shadow-2xl rounded-full"
-              />
+            {/* Logo on a clear white card */}
+            <div className="mb-10 inline-flex">
+              <div className="rounded-3xl bg-white p-4 ring-1 ring-black/5 shadow-lg">
+                <img
+                  src={orgLogo}
+                  alt={`${orgName} logo`}
+                  className="h-28 w-28 object-contain"
+                />
+              </div>
             </div>
 
             {/* Hero Text with Modern Typography */}
@@ -332,12 +335,14 @@ export default function LoginPage() {
           <div className="w-full max-w-md space-y-8">
             {/* Mobile Logo */}
             <div className="flex flex-col items-center lg:hidden mb-8">
-              <img
-                src={orgLogo}
-                alt={`${orgName} logo`}
-                className="w-32 h-32 object-contain drop-shadow-xl mb-4 rounded-full"
-              />
-              <h2 className="mt-4 text-3xl font-bold text-gray-900 text-center">
+              <div className="rounded-3xl bg-white p-4 ring-1 ring-black/5 shadow-md mb-4">
+                <img
+                  src={orgLogo}
+                  alt={`${orgName} logo`}
+                  className="h-24 w-24 object-contain"
+                />
+              </div>
+              <h2 className="mt-2 text-3xl font-bold text-gray-900 text-center">
                 Welcome to {orgCodeDisplay} Assets Manager
               </h2>
               <p className="text-gray-600 text-center">
@@ -421,11 +426,13 @@ export default function LoginPage() {
                             : "border-gray-200/70 bg-white/70 hover:bg-white"
                         }`}
                       >
-                        <img
-                          src={option.branding.logoProxy || option.branding.logo}
-                          alt={`${option.name} logo`}
-                          className="w-10 h-10 object-contain mb-2"
-                        />
+                        <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-white ring-1 ring-black/5 p-2">
+                          <img
+                            src={option.branding.logoProxy || option.branding.logo}
+                            alt={`${option.name} logo`}
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
                         <span className="text-sm font-semibold text-gray-800">
                           {option.code}
                         </span>
@@ -619,12 +626,13 @@ export default function LoginPage() {
                         Remember me
                       </label>
                     </div>
-                    <a
-                      href="#"
+                    <Link
+                      href="/forgot-password"
                       className="text-sm font-semibold link-org-primary"
+                      prefetch={false}
                     >
                       Forgot password?
-                    </a>
+                    </Link>
                   </div>
 
                   {/* Ultra-Modern Login Button */}

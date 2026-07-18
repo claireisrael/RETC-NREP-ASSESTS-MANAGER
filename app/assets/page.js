@@ -52,6 +52,11 @@ import {
   formatCategory,
 } from "../../lib/utils/mappings.js";
 import {
+  ASSET_SUBCATEGORIES,
+  getSubcategoriesForCategory,
+  assetMatchesSubcategory,
+} from "../../lib/constants/asset-subcategories.js";
+import {
   getCurrentStaff,
   permissions,
   getCurrentViewMode,
@@ -68,9 +73,10 @@ export default function AssetsPage() {
 
   // Filters
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [subcategoryFilter, setSubcategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -116,7 +122,7 @@ export default function AssetsPage() {
   useEffect(() => {
     loadAssets();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, categoryFilter, statusFilter, departmentFilter, currentPage]);
+  }, [search, categoryFilter, subcategoryFilter, statusFilter, departmentFilter, currentPage]);
 
   const handleViewModeChange = (mode) => {
     setViewMode(mode);
@@ -148,43 +154,57 @@ export default function AssetsPage() {
         queries.push(Query.search("name", search));
       }
 
-      // Add filters
-      if (categoryFilter) {
+      // Add filters (skip sentinel "all" values)
+      if (categoryFilter && categoryFilter !== "all") {
         queries.push(Query.equal("category", categoryFilter));
       }
-      if (statusFilter) {
+      if (statusFilter && statusFilter !== "all") {
         queries.push(Query.equal("availableStatus", statusFilter));
       }
-      if (departmentFilter) {
+      if (departmentFilter && departmentFilter !== "all") {
         queries.push(Query.equal("departmentId", departmentFilter));
       }
 
-      // Add pagination
-      queries.push(Query.limit(pageSize));
-      queries.push(Query.offset((currentPage - 1) * pageSize));
+      // Subcategory is matched client-side so free-text / legacy values
+      // (and names like "Camera - Canon") still filter correctly.
+      // Fetch a larger page when a subcategory is active.
+      const activeSubcategory =
+        subcategoryFilter && subcategoryFilter !== "all"
+          ? subcategoryFilter
+          : null;
+      const fetchLimit = activeSubcategory ? 500 : pageSize;
+      const fetchOffset = activeSubcategory ? 0 : (currentPage - 1) * pageSize;
+
+      queries.push(Query.limit(fetchLimit));
+      queries.push(Query.offset(fetchOffset));
       queries.push(Query.orderDesc("$createdAt"));
 
       const result = await assetsService.list(queries);
 
       // Filter to only show assets (not consumables)
-      const assetsOnly = result.documents.filter(
+      let assetsOnly = result.documents.filter(
         (item) =>
           item.itemType === ENUMS.ITEM_TYPE.ASSET ||
           !item.itemType ||
           item.itemType === undefined
       );
 
-      // Debug logging (development only)
-      if (process.env.NODE_ENV === 'development') {
-        console.log("All items:", result.documents.length);
-        console.log("Assets only:", assetsOnly.length);
-        console.log("Item types found:", [
-          ...new Set(result.documents.map((item) => item.itemType)),
-        ]);
+      if (activeSubcategory) {
+        assetsOnly = assetsOnly.filter((asset) =>
+          assetMatchesSubcategory(asset, activeSubcategory)
+        );
+        const start = (currentPage - 1) * pageSize;
+        setTotalPages(Math.max(1, Math.ceil(assetsOnly.length / pageSize)));
+        setAssets(assetsOnly.slice(start, start + pageSize));
+      } else {
+        setAssets(assetsOnly);
+        setTotalPages(
+          Math.max(
+            1,
+            Math.ceil((result.total || assetsOnly.length) / pageSize)
+          )
+        );
       }
-
-      setAssets(assetsOnly);
-      setTotalPages(Math.ceil(assetsOnly.length / pageSize));
     } catch (error) {
       console.error("Failed to load assets:", error);
     } finally {
@@ -194,11 +214,28 @@ export default function AssetsPage() {
 
   const clearFilters = () => {
     setSearch("");
-    setCategoryFilter("");
-    setStatusFilter("");
-    setDepartmentFilter("");
+    setCategoryFilter("all");
+    setSubcategoryFilter("all");
+    setStatusFilter("all");
+    setDepartmentFilter("all");
     setCurrentPage(1);
   };
+
+  // Subcategory options: use the selected category's predefined list, or a
+  // de-duplicated union of all predefined subcategories when no category is set.
+  const subcategoryOptions = (() => {
+    if (categoryFilter && categoryFilter !== "all") {
+      return getSubcategoriesForCategory(categoryFilter);
+    }
+    const seen = new Set();
+    return Object.values(ASSET_SUBCATEGORIES)
+      .flat()
+      .filter(({ value }) => {
+        if (seen.has(value)) return false;
+        seen.add(value);
+        return true;
+      });
+  })();
 
   // This is a requester page - show "Request Asset" by default
   // Only show "Add Asset" if user is in admin mode and has permissions
@@ -273,7 +310,13 @@ export default function AssetsPage() {
 
             {/* Category Filter */}
             <div className="lg:w-48">
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <Select
+                value={categoryFilter}
+                onValueChange={(value) => {
+                  setCategoryFilter(value);
+                  setSubcategoryFilter("all");
+                }}
+              >
                 <SelectTrigger className="border-gray-300 focus:border-primary-500 focus:ring-primary-500">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
@@ -287,6 +330,28 @@ export default function AssetsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Subcategory Filter */}
+            {subcategoryOptions.length > 0 && (
+              <div className="lg:w-48">
+                <Select
+                  value={subcategoryFilter}
+                  onValueChange={setSubcategoryFilter}
+                >
+                  <SelectTrigger className="border-gray-300 focus:border-primary-500 focus:ring-primary-500">
+                    <SelectValue placeholder="Subcategory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Subcategories</SelectItem>
+                    {subcategoryOptions.map((sub) => (
+                      <SelectItem key={sub.value} value={sub.value}>
+                        {sub.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Status Filter */}
             <div className="lg:w-48">
@@ -399,7 +464,11 @@ export default function AssetsPage() {
                 No assets found
               </h3>
               <p className="text-gray-600 mb-8 text-lg">
-                {search || categoryFilter || statusFilter || departmentFilter
+                {search ||
+                (categoryFilter && categoryFilter !== "all") ||
+                (subcategoryFilter && subcategoryFilter !== "all") ||
+                (statusFilter && statusFilter !== "all") ||
+                (departmentFilter && departmentFilter !== "all")
                   ? "No assets match your current filters. Try adjusting your search criteria."
                   : shouldShowAddAsset
                   ? "Get started by adding your first asset."
@@ -494,7 +563,7 @@ export default function AssetsPage() {
                     </TableCell>
                     <TableCell className="py-4 px-6">
                       <div className="flex items-center gap-2 text-gray-600">
-                        <MapPin className="h-4 w-4 text-gray-400" />
+                        <MapPin className="h-4 w-4 text-red-600" />
                         <span>
                           {asset.locationName ||
                             asset.roomOrArea ||
@@ -620,7 +689,7 @@ export default function AssetsPage() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600 mb-4">
                         <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-gray-400" />
+                          <MapPin className="h-4 w-4 text-red-600" />
                           <span>
                             {asset.locationName ||
                               asset.roomOrArea ||

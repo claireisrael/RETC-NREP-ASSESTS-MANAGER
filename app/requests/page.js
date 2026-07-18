@@ -37,6 +37,10 @@ import { assetImageService } from "../../lib/appwrite/image-service.js";
 import { getCurrentStaff } from "../../lib/utils/auth.js";
 import { ENUMS } from "../../lib/appwrite/config.js";
 import { useOrgTheme } from "../../components/providers/org-theme-provider";
+import {
+  aggregateResolvedItems,
+  formatItemQuantityLabel,
+} from "../../lib/utils/requested-items.js";
 import { Query } from "appwrite";
 import { PageLoading } from "../../components/ui/loading";
 import { formatCategory, hexToRgba, getConsumableStatus } from "../../lib/utils/mappings.js";
@@ -453,163 +457,40 @@ export default function MyRequestsPage() {
                         </div>
                       </div>
 
-                      {/* Requested Assets */}
+                      {/* Requested Items — name × quantity */}
                       <div>
                         <div className="flex items-center gap-2 mb-3">
                           <Package className="w-5 h-5 text-primary-600" />
                           <span className="text-base font-semibold text-gray-700">
-                            Requested Assets ({request.assets.length})
+                            Requested Items (
+                            {
+                              aggregateResolvedItems(request.assets || [])
+                                .length
+                            }
+                            )
                           </span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                          {request.assets.map((asset, index) => {
-                            const assetType = (asset.itemType || "")
-                              .toString()
-                              .toUpperCase();
-                            const assetName =
-                              asset.name ||
-                              asset.assetName ||
-                              asset.itemName ||
-                              "Unnamed item";
-                            const fallbackInitial = assetName
-                              .charAt(0)
-                              .toUpperCase();
-
-                            let primaryImage = "";
-
-                            const directImage =
-                              asset.assetImage ||
-                              asset.imageUrl ||
-                              asset.image ||
-                              asset.thumbnail ||
-                              asset.thumbnailUrl;
-
-                            if (directImage && directImage.trim() !== "") {
-                              primaryImage = directImage;
-                            } else {
-                              try {
-                                const urls = assetImageService.getAssetImageUrls(
-                                  asset.publicImages
-                                );
-                                if (urls && urls.length > 0) {
-                                  primaryImage = urls[0];
-                                }
-                              } catch (error) {
-                                console.warn(
-                                  "Error loading asset images:",
-                                  error
-                                );
-                              }
-                            }
-
-                            const hasImage =
-                              primaryImage && primaryImage.trim() !== "";
-
-                            return (
-                              <div
-                                key={`${asset.$id || asset.id || index}-${index}`}
-                                className="bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200/60 p-4 hover:shadow-lg hover:scale-105 transition-all duration-300 group"
+                        <div className="flex flex-wrap gap-2">
+                          {aggregateResolvedItems(request.assets || []).map(
+                            ({ item, quantity, id }) => (
+                              <Badge
+                                key={id}
+                                className="text-sm border px-3 py-1.5 shadow-sm"
+                                style={{
+                                  background: highlightSoft,
+                                  borderColor: highlightBorder,
+                                  color: highlightColor,
+                                }}
                               >
-                                {/* Asset Image */}
-                                <div className="mb-3">
-                                  {hasImage ? (
-                                    <div className="aspect-video relative overflow-hidden rounded-lg">
-                                      <img
-                                        src={primaryImage}
-                                        alt={assetName}
-                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                                        onError={(e) => {
-                                          e.target.style.display = "none";
-                                          e.target.nextSibling.style.display =
-                                            "flex";
-                                        }}
-                                      />
-                                      <div className="hidden w-full h-full bg-gradient-to-br from-primary-100/60 to-primary-200/40 items-center justify-center">
-                                        <div className="text-center space-y-2">
-                                          <div
-                                            className="w-10 h-10 rounded-full flex items-center justify-center mx-auto text-white font-semibold"
-                                            style={{
-                                              background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
-                                              boxShadow:
-                                                "0 10px 18px -12px rgba(14,99,112,0.45)",
-                                            }}
-                                          >
-                                            {fallbackInitial}
-                                          </div>
-                                          <p
-                                            className="text-xs font-semibold uppercase tracking-wide"
-                                            style={{ color: highlightColor }}
-                                          >
-                                            {assetType ===
-                                            ENUMS.ITEM_TYPE.CONSUMABLE
-                                              ? "Consumable"
-                                              : "Asset"}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div
-                                      className="aspect-video rounded-lg flex items-center justify-center border overflow-hidden"
-                                      style={{
-                                        background: `linear-gradient(135deg, ${hexToRgba(
-                                          highlightColor,
-                                          0.18
-                                        )}, ${hexToRgba(primaryColor, 0.07)})`,
-                                        borderColor: highlightBorder,
-                                      }}
-                                    >
-                                      <div className="text-center space-y-2">
-                                        <div
-                                          className="w-12 h-12 rounded-full flex items-center justify-center mx-auto text-white font-semibold shadow-md"
-                                          style={{
-                                            background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
-                                          }}
-                                        >
-                                          {fallbackInitial}
-                                        </div>
-                                        <p
-                                          className="text-xs font-semibold uppercase tracking-wide"
-                                          style={{ color: highlightColor }}
-                                        >
-                                          {assetType ===
-                                          ENUMS.ITEM_TYPE.CONSUMABLE
-                                            ? "Consumable"
-                                            : "Asset"}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Asset Details */}
-                                <div>
-                                  <h4 className="font-semibold text-gray-900 truncate mb-1 group-hover:text-primary-700 transition-colors duration-300">
-                                    {assetName}
-                                  </h4>
-                                  <div className="text-xs text-gray-600 space-y-1">
-                                    <p>Tag: {asset.assetTag || "N/A"}</p>
-                                    <p>
-                                      Location: {asset.locationName || "N/A"}
-                                    </p>
-                                  </div>
-                                  <Badge
-                                    className="mt-2 text-xs border px-3 py-1 shadow-sm"
-                                    style={{
-                                      background: highlightSoft,
-                                      borderColor: highlightBorder,
-                                      color: highlightColor,
-                                    }}
-                                  >
-                                    {asset.itemType === ENUMS.ITEM_TYPE.CONSUMABLE
-                                      ? getConsumableStatus(asset) || "In Stock"
-                                      : asset.availableStatus?.replace(/_/g, " ") ||
-                                        "Available"}
-                                  </Badge>
-                                </div>
-                              </div>
-                            );
-                          })}
+                                {formatItemQuantityLabel(item, quantity)}
+                              </Badge>
+                            )
+                          )}
+                          {(request.assets || []).length === 0 && (
+                            <span className="text-sm text-gray-500">
+                              No items specified
+                            </span>
+                          )}
                         </div>
                       </div>
 

@@ -3,11 +3,14 @@ import { NextResponse } from "next/server";
 // Routes that don't require authentication
 const PUBLIC_ROUTES = [
   "/login",
+  "/forgot-password",
+  "/reset-password",
   "/setup",
   "/unauthorized",
   "/guest",
   "/guest/assets",
   "/api/guest",
+  "/api/auth",
   "/select-org",
 ];
 
@@ -29,19 +32,19 @@ const ORG_REQUIRED_ROUTES = [
   "/assets",
   "/consumables",
   "/requests",
-  "/api",
 ];
 
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
   const response = NextResponse.next();
 
-  // Allow API routes, static files, and Next.js internals
+  // Allow API auth + guest routes, static files, and Next.js internals
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico") ||
     pathname.includes(".") ||
-    pathname.startsWith("/api/guest")
+    pathname.startsWith("/api/guest") ||
+    pathname.startsWith("/api/auth")
   ) {
     return response;
   }
@@ -91,7 +94,8 @@ export async function middleware(request) {
     }
   }
 
-  // Prevent authenticated users from accessing login page
+  // Logged-in users should not see the login page again.
+  // Password reset pages stay reachable (session may be stale / user wants a reset).
   if (pathname === "/login" && isAuthenticated) {
     if (!orgCookie?.value) {
       const selectUrl = new URL("/select-org", request.url);

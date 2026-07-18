@@ -118,7 +118,7 @@ export default function ConsumableDetailPage() {
   };
 
   const canManageConsumables =
-    currentStaff && permissions.canManageAssets(currentStaff);
+    currentStaff && permissions.canManageConsumables(currentStaff);
 
   if (loading) {
     return (

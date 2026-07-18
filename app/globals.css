@@ -193,20 +193,20 @@ body {
 }
 
 html[data-org="NREP"] {
-  --org-primary: #0e6370;
-  --org-primary-dark: #0a4e57;
-  --org-accent: #1f8b99;
-  --org-accent-dark: #166776;
-  --org-background: #e6f6f8;
+  --org-primary: #2e9ecc;
+  --org-primary-dark: #357c9d;
+  --org-accent: #efa74f;
+  --org-accent-dark: #e08e2a;
+  --org-background: #eaf6fb;
   --org-surface: #ffffff;
-  --org-muted: rgba(222, 243, 245, 0.6);
-  --org-gradient-from: rgba(14, 99, 112, 0.85);
-  --org-gradient-to: rgba(22, 103, 118, 0.6);
-  --org-hero-accent-a: rgba(14, 99, 112, 0.35);
-  --org-hero-accent-b: rgba(31, 139, 153, 0.25);
-  --org-hero-accent-c: rgba(10, 78, 87, 0.25);
-  --org-highlight: #f7901e;
-  --org-highlight-dark: #dc7a12;
+  --org-muted: rgba(234, 246, 251, 0.6);
+  --org-gradient-from: rgba(46, 158, 204, 0.95);
+  --org-gradient-to: rgba(239, 167, 79, 0.85);
+  --org-hero-accent-a: rgba(46, 158, 204, 0.35);
+  --org-hero-accent-b: rgba(239, 167, 79, 0.25);
+  --org-hero-accent-c: rgba(53, 124, 157, 0.25);
+  --org-highlight: #efa74f;
+  --org-highlight-dark: #e08e2a;
 }
 
 html[data-org="RETC"] {
@@ -266,8 +266,14 @@ html[data-org="RETC"] .login-page__hero-gradient {
   background: linear-gradient(160deg, #047857 0%, #059669 100%);
 }
 
+/* Match dashboard sidebar: deep blue ? primary blue, soft orange lift */
 html[data-org="NREP"] .login-page__hero-gradient {
-  background: linear-gradient(160deg, #0a4e57 0%, #0e6370 45%, #1f8b99 100%);
+  background: linear-gradient(
+    160deg,
+    #357c9d 0%,
+    #2e9ecc 58%,
+    color-mix(in srgb, #2e9ecc 78%, #efa74f 22%) 100%
+  );
 }
 
 .login-page__orb {
@@ -292,88 +298,88 @@ html[data-org="NREP"] .login-page__hero-gradient {
 }
 
 html[data-org="NREP"] .from-primary-900 {
-  --tw-gradient-from: #0a4e57 !important;
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(10, 78, 87, 0)) !important;
+  --tw-gradient-from: #357c9d !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(53, 124, 157, 0)) !important;
 }
 
 html[data-org="NREP"] .via-primary-800 {
-  --tw-gradient-stops: var(--tw-gradient-from), #0e6370, var(--tw-gradient-to, rgba(14, 99, 112, 0)) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), #2e9ecc, var(--tw-gradient-to, rgba(46, 158, 204, 0)) !important;
 }
 
 html[data-org="NREP"] .to-primary-700 {
-  --tw-gradient-to: #1f8b99 !important;
+  --tw-gradient-to: #2e9ecc !important;
 }
 
 html[data-org="NREP"] .border-primary-800\/50 {
-  border-color: rgba(10, 78, 87, 0.5) !important;
+  border-color: rgba(53, 124, 157, 0.5) !important;
 }
 
 html[data-org="NREP"] .border-primary-600\/50 {
-  border-color: rgba(14, 99, 112, 0.5) !important;
+  border-color: rgba(46, 158, 204, 0.5) !important;
 }
 
 html[data-org="NREP"] .border-primary-500\/30 {
-  border-color: rgba(31, 139, 153, 0.3) !important;
+  border-color: rgba(46, 158, 204, 0.3) !important;
 }
 
 html[data-org="NREP"] .bg-primary-500\/20 {
-  background-color: rgba(31, 139, 153, 0.2) !important;
+  background-color: rgba(46, 158, 204, 0.2) !important;
 }
 
 html[data-org="NREP"] .text-primary-300 {
-  color: rgba(31, 139, 153, 1) !important;
+  color: #7ec8e3 !important;
 }
 
 html[data-org="NREP"] .text-primary-400 {
-  color: rgba(14, 99, 112, 1) !important;
+  color: #2e9ecc !important;
 }
 
 html[data-org="NREP"] .hover\:bg-primary-700\/50:hover {
-  background-color: rgba(14, 99, 112, 0.5) !important;
+  background-color: rgba(53, 124, 157, 0.5) !important;
 }
 
 html[data-org="NREP"] .bg-sidebar-500 {
-  background-color: rgba(14, 99, 112, 0.7) !important;
+  background-color: rgba(46, 158, 204, 0.7) !important;
 }
 
 html[data-org="NREP"] .bg-sidebar-500\/20 {
-  background-color: rgba(14, 99, 112, 0.2) !important;
+  background-color: rgba(46, 158, 204, 0.2) !important;
 }
 
 html[data-org="NREP"] .text-sidebar-300 {
-  color: rgba(222, 243, 245, 0.9) !important;
+  color: rgba(234, 246, 251, 0.95) !important;
 }
 
 html[data-org="NREP"] .bg-sidebar-600 {
-  background-color: rgba(10, 78, 87, 0.9) !important;
+  background-color: rgba(53, 124, 157, 0.9) !important;
 }
 
 html[data-org="NREP"] .hover\:bg-sidebar-700:hover {
-  background-color: rgba(10, 78, 87, 1) !important;
+  background-color: #357c9d !important;
 }
 
 .bg-org-gradient {
-  background: linear-gradient(135deg, var(--org-primary), var(--org-primary-dark));
+  background: linear-gradient(135deg, var(--org-primary), var(--org-highlight));
   color: #ffffff;
 }
 
 .bg-org-gradient-accent {
-  background: linear-gradient(135deg, var(--org-accent), var(--org-accent-dark));
+  background: linear-gradient(135deg, var(--org-highlight), var(--org-highlight-dark));
   color: #ffffff;
 }
 
 .bg-org-gradient-soft {
-  background: linear-gradient(135deg, var(--org-primary), var(--org-accent));
+  background: linear-gradient(135deg, var(--org-primary), var(--org-highlight));
   color: #ffffff;
 }
 
 .hover\:bg-org-gradient:hover {
-  background: linear-gradient(135deg, var(--org-primary), var(--org-primary-dark));
+  background: linear-gradient(135deg, var(--org-primary-dark), var(--org-highlight-dark));
   color: #ffffff;
 }
 
 .hover\:bg-org-gradient-soft:hover {
-  background: linear-gradient(135deg, var(--org-primary), var(--org-accent));
+  background: linear-gradient(135deg, var(--org-primary-dark), var(--org-highlight-dark));
   color: #ffffff;
 }
 
@@ -593,7 +599,7 @@ html[data-org="NREP"] .org-button--outline:hover {
 html[data-org="NREP"] .bg-blue-50,
 html[data-org="NREP"] .bg-blue-100,
 html[data-org="NREP"] .bg-blue-200 {
-  background-color: rgba(14, 99, 112, 0.12) !important;
+  background-color: rgba(46, 158, 204, 0.14) !important;
 }
 
 html[data-org="NREP"] .text-blue-500,
@@ -601,18 +607,21 @@ html[data-org="NREP"] .text-blue-600,
 html[data-org="NREP"] .text-blue-700,
 html[data-org="NREP"] .text-blue-800,
 html[data-org="NREP"] .text-blue-900 {
-  color: var(--org-primary) !important;
+  color: var(--org-primary-dark) !important;
 }
 
 html[data-org="NREP"] .border-blue-200,
 html[data-org="NREP"] .border-blue-300,
 html[data-org="NREP"] .border-blue-400 {
-  border-color: rgba(14, 99, 112, 0.28) !important;
+  border-color: rgba(46, 158, 204, 0.32) !important;
 }
 
 html[data-org="NREP"] .bg-blue-500,
 html[data-org="NREP"] .bg-blue-600,
-html[data-org="NREP"] .bg-blue-700,
+html[data-org="NREP"] .bg-blue-700 {
+  background-color: var(--org-primary) !important;
+}
+
 html[data-org="NREP"] .from-blue-50,
 html[data-org="NREP"] .from-blue-100,
 html[data-org="NREP"] .from-blue-200,
@@ -627,27 +636,26 @@ html[data-org="NREP"] .to-blue-500,
 html[data-org="NREP"] .to-blue-600,
 html[data-org="NREP"] .via-blue-500,
 html[data-org="NREP"] .via-blue-600 {
-  --tw-gradient-from: rgba(14, 99, 112, 0.22) !important;
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(14, 99, 112, 0)) !important;
-  --tw-gradient-to: rgba(10, 78, 87, 0.16) !important;
-  background-color: rgba(14, 99, 112, 0.22) !important;
+  --tw-gradient-from: rgba(46, 158, 204, 0.24) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(46, 158, 204, 0)) !important;
+  --tw-gradient-to: rgba(53, 124, 157, 0.18) !important;
 }
 
 html[data-org="NREP"] .hover\:bg-blue-500:hover,
 html[data-org="NREP"] .hover\:bg-blue-600:hover,
 html[data-org="NREP"] .hover\:bg-blue-700:hover {
-  background-color: rgba(10, 78, 87, 0.9) !important;
+  background-color: var(--org-primary-dark) !important;
 }
 
 html[data-org="NREP"] .bg-green-50,
 html[data-org="NREP"] .bg-green-100,
 html[data-org="NREP"] .bg-green-200 {
-  background-color: rgba(14, 99, 112, 0.12) !important;
+  background-color: rgba(46, 158, 204, 0.14) !important;
 }
 
 html[data-org="NREP"] .bg-green-300,
 html[data-org="NREP"] .bg-green-400 {
-  background-color: rgba(14, 99, 112, 0.18) !important;
+  background-color: rgba(239, 167, 79, 0.22) !important;
 }
 
 html[data-org="NREP"] .bg-green-500,
@@ -673,14 +681,14 @@ html[data-org="NREP"] .border-green-400,
 html[data-org="NREP"] .border-green-500,
 html[data-org="NREP"] .border-green-600,
 html[data-org="NREP"] .border-green-700 {
-  border-color: rgba(14, 99, 112, 0.36) !important;
+  border-color: rgba(46, 158, 204, 0.36) !important;
 }
 
 html[data-org="NREP"] .text-green-500,
 html[data-org="NREP"] .text-green-600,
 html[data-org="NREP"] .text-green-700,
 html[data-org="NREP"] .text-green-800 {
-  color: var(--org-primary) !important;
+  color: var(--org-primary-dark) !important;
 }
 
 html[data-org="NREP"] .from-green-50,
@@ -689,8 +697,8 @@ html[data-org="NREP"] .from-green-200,
 html[data-org="NREP"] .to-green-100,
 html[data-org="NREP"] .to-green-200,
 html[data-org="NREP"] .via-green-500 {
-  --tw-gradient-from: rgba(14, 99, 112, 0.18) !important;
-  --tw-gradient-to: rgba(10, 78, 87, 0.14) !important;
+  --tw-gradient-from: rgba(46, 158, 204, 0.2) !important;
+  --tw-gradient-to: rgba(239, 167, 79, 0.18) !important;
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
 }
 
@@ -730,19 +738,19 @@ html[data-org="NREP"] .bg-purple-50,
 html[data-org="NREP"] .bg-purple-100,
 html[data-org="NREP"] .bg-purple-200,
 html[data-org="NREP"] .bg-indigo-100 {
-  background-color: rgba(31, 139, 153, 0.2) !important;
+  background-color: rgba(53, 124, 157, 0.18) !important;
 }
 
 html[data-org="NREP"] .text-purple-500,
 html[data-org="NREP"] .text-purple-600,
 html[data-org="NREP"] .text-purple-700,
 html[data-org="NREP"] .text-indigo-600 {
-  color: var(--org-accent) !important;
+  color: var(--org-primary-dark) !important;
 }
 
 html[data-org="NREP"] .border-purple-200,
 html[data-org="NREP"] .border-indigo-200 {
-  border-color: rgba(31, 139, 153, 0.28) !important;
+  border-color: rgba(53, 124, 157, 0.3) !important;
 }
 
 html[data-org="NREP"] .from-purple-50,
@@ -751,8 +759,8 @@ html[data-org="NREP"] .from-indigo-50,
 html[data-org="NREP"] .to-purple-100,
 html[data-org="NREP"] .to-indigo-100,
 html[data-org="NREP"] .via-purple-500 {
-  --tw-gradient-from: rgba(31, 139, 153, 0.22) !important;
-  --tw-gradient-to: rgba(22, 103, 118, 0.18) !important;
+  --tw-gradient-from: rgba(53, 124, 157, 0.2) !important;
+  --tw-gradient-to: rgba(46, 158, 204, 0.16) !important;
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
 }
 
@@ -911,7 +919,7 @@ html[data-org="NREP"] .bg-org-primary-soft {
 }
 
 html[data-org="NREP"] .bg-org-accent-soft {
-  background-color: rgba(31, 139, 153, 0.16);
+  background-color: rgba(239, 167, 79, 0.16);
 }
 
 .bg-org-highlight-soft {
@@ -943,8 +951,8 @@ html[data-org="NREP"] .badge-org-primary {
 }
 
 html[data-org="NREP"] .badge-org-accent {
-  background-color: rgba(31, 139, 153, 0.22);
-  color: var(--org-primary);
+  background-color: rgba(239, 167, 79, 0.22);
+  color: var(--org-highlight-dark);
 }
 
 .badge-org-highlight {
@@ -1041,29 +1049,31 @@ html[data-org="NREP"] .org-button--ghost:hover svg {
   color: #ffffff;
 }
 
-html[data-org="NREP"] .sidebar-signout,
+.sidebar-signout {
+  background: var(--org-highlight-dark) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--org-highlight-dark) !important;
+}
+
+.sidebar-signout svg {
+  color: #ffffff !important;
+}
+
+.sidebar-signout:hover {
+  background: color-mix(in srgb, var(--org-highlight-dark) 82%, #000000) !important;
+  color: #ffffff !important;
+  border-color: color-mix(in srgb, var(--org-highlight-dark) 82%, #000000) !important;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--org-highlight-dark) 55%, transparent) !important;
+}
+
+.sidebar-signout:hover svg {
+  color: #ffffff !important;
+}
+
 html[data-org="NREP"] .sidebar-user-toggle {
   background: linear-gradient(135deg, rgba(14, 99, 112, 0.18), rgba(31, 139, 153, 0.18));
   color: #ffffff;
   border-color: transparent;
-}
-
-html[data-org="NREP"] .sidebar-signout:hover {
-  background: linear-gradient(135deg, rgba(14, 99, 112, 0.35), rgba(247, 144, 30, 0.65));
-  color: #ffffff;
-  box-shadow: 0 12px 24px rgba(14, 99, 112, 0.28);
-}
-
-html[data-org="NREP"] .sidebar-signout {
-  background: linear-gradient(135deg, var(--org-highlight), rgba(14, 99, 112, 0.65));
-  color: #ffffff;
-  border: 1px solid rgba(247, 144, 30, 0.7);
-}
-
-html[data-org="NREP"] .sidebar-signout:hover {
-  background: linear-gradient(135deg, rgba(247, 144, 30, 0.92), var(--org-primary));
-  color: #ffffff;
-  box-shadow: 0 14px 24px rgba(14, 99, 112, 0.28);
 }
 
 html[data-org="NREP"] .sidebar-user-toggle:not(.bg-org-gradient):not(.bg-org-gradient-accent) {
@@ -1131,4 +1141,9 @@ html[data-org="NREP"] .org-button--ghost:hover {
 
 html[data-org="NREP"] .org-button--outline {
   background-color: #ffffff;
+}
+/* /admin/assets ? flatten panel/card shadows only on this page */
+.admin-assets-page .container > .rounded-2xl,
+.admin-assets-page .container > .grid > * {
+  box-shadow: none !important;
 }

@@ -1,10 +1,8 @@
 "use client";
 
 import Link from "next/link";
-
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-// Removed MainLayout import - using custom layout
 import {
   Card,
   CardContent,
@@ -29,6 +27,7 @@ import { ENUMS } from "../../../../lib/appwrite/config.js";
 import { canIssueAsset } from "../../../../lib/utils/validation.js";
 import { EmailService } from "../../../../lib/services/email.js";
 import { assetImageService } from "../../../../lib/appwrite/image-service.js";
+import { aggregateResolvedItems } from "../../../../lib/utils/requested-items.js";
 
 export default function IssueAssetsPage() {
   const params = useParams();
@@ -43,6 +42,7 @@ export default function IssueAssetsPage() {
   // Issue form data
   const [issueData, setIssueData] = useState({});
   const [handoverNote, setHandoverNote] = useState("");
+  const [expectedReturnDate, setExpectedReturnDate] = useState("");
 
   useEffect(() => {
     loadData();
@@ -70,12 +70,26 @@ export default function IssueAssetsPage() {
       ]);
 
       setRequest({ ...requestData, requester });
-      setAssets(assetsData);
+      const uniqueAssets = aggregateResolvedItems(assetsData).map(
+        ({ item, quantity }) => ({
+          ...item,
+          requestQuantity: quantity,
+        })
+      );
+      setAssets(uniqueAssets);
       setStaff(currentStaff);
+
+      // Prefill return date from the request (required before issue).
+      if (requestData.expectedReturnDate) {
+        const d = new Date(requestData.expectedReturnDate);
+        if (!Number.isNaN(d.getTime())) {
+          setExpectedReturnDate(d.toISOString().slice(0, 10));
+        }
+      }
 
       // Initialize issue data for each asset
       const initialIssueData = {};
-      assetsData.forEach((asset) => {
+      uniqueAssets.forEach((asset) => {
         initialIssueData[asset.$id] = {
           preCondition: asset.currentCondition,
           accessories: [],
@@ -128,6 +142,17 @@ export default function IssueAssetsPage() {
     setError("");
 
     try {
+      if (!expectedReturnDate) {
+        throw new Error(
+          "Please set the expected return date before issuing. Reminder emails use this date."
+        );
+      }
+      const returnDate = new Date(`${expectedReturnDate}T12:00:00`);
+      if (Number.isNaN(returnDate.getTime())) {
+        throw new Error("Expected return date is invalid.");
+      }
+      const returnDateIso = returnDate.toISOString();
+
       // Validate all assets can be issued
       for (const asset of assets) {
         // Assign asset to custodian
@@ -149,29 +174,32 @@ export default function IssueAssetsPage() {
         canIssueAsset(asset);
       }
 
-      // Create issue records for each asset
+      // Create issue records for each asset (qty aggregated from duplicated IDs)
       const issuePromises = assets.map(async (asset) => {
         const assetIssueData = issueData[asset.$id];
+        const qty = Math.max(1, Number(asset.requestQuantity) || 1);
 
-        // Create issue record
+        // Create issue record. requesterStaffId captures WHO received the item.
         const issue = await assetIssuesService.create({
           requestId: request.$id,
           assetId: asset.$id,
+          requesterStaffId: request.requesterStaffId,
+          requesterName: request.requester?.name || null,
+          quantity: qty,
           issuedByStaffId: staff.$id,
           preCondition: assetIssueData.preCondition,
           accessories: assetIssueData.accessories,
           issuedAt: new Date().toISOString(),
-          dueAt: request.expectedReturnDate,
+          dueAt: returnDateIso,
           handoverNote,
           acknowledgedByRequester: false,
         });
 
         // Update asset/consumable status based on type
         if (asset.itemType === ENUMS.ITEM_TYPE.CONSUMABLE) {
-          // For consumables, reduce stock by 1
           await assetsService.adjustConsumableStock(
             asset.$id,
-            -1, // Reduce stock by 1
+            -qty,
             staff.$id,
             `Consumable issued for request #${request.$id.slice(-8)}`
           );
@@ -203,17 +231,22 @@ export default function IssueAssetsPage() {
 
       await Promise.all(issuePromises);
 
-      // Update request status to fulfilled
+      // Persist return date + mark fulfilled so reminders can fire on that day.
       await assetRequestsService.update(request.$id, {
         status: ENUMS.REQUEST_STATUS.FULFILLED,
+        expectedReturnDate: returnDateIso,
       });
 
       // Send email notification to requester about asset issuance
       try {
         await EmailService.sendAssetIssued(
-          request,
+          {
+            ...request,
+            expectedReturnDate: returnDateIso,
+            handoverNote,
+          },
           request.requester,
-          assets[0],
+          assets,
           staff
         );
       } catch (error) {
@@ -232,17 +265,16 @@ export default function IssueAssetsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-sidebar-50/40">
-        <div className="relative max-w-6xl mx-auto space-y-8 p-6">
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-8">
-            <div className="animate-pulse">
-              <div className="h-12 bg-gradient-to-r from-primary-200 to-sidebar-200 rounded-xl w-1/3 mb-4"></div>
-              <div className="h-6 bg-gradient-to-r from-primary-200 to-sidebar-200 rounded w-1/2"></div>
-            </div>
-          </div>
-          <div className="space-y-6">
-            <div className="h-48 bg-gradient-to-r from-primary-200 to-sidebar-200 rounded-2xl"></div>
-            <div className="h-48 bg-gradient-to-r from-primary-200 to-sidebar-200 rounded-2xl"></div>
+      <div
+        className="min-h-screen"
+        style={{
+          background:
+            "linear-gradient(160deg, var(--org-background), #ffffff 55%)",
+        }}
+      >
+        <div className="max-w-5xl mx-auto p-6">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-10 text-center text-slate-600">
+            Loading request…
           </div>
         </div>
       </div>
@@ -251,9 +283,15 @@ export default function IssueAssetsPage() {
 
   if (error || !request) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-sidebar-50/40">
-        <div className="relative max-w-6xl mx-auto space-y-8 p-6">
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-8">
+      <div
+        className="min-h-screen"
+        style={{
+          background:
+            "linear-gradient(160deg, var(--org-background), #ffffff 55%)",
+        }}
+      >
+        <div className="max-w-5xl mx-auto p-6">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-8">
             <Alert
               variant="destructive"
               className="bg-red-50 border-red-200 text-red-800"
@@ -263,11 +301,7 @@ export default function IssueAssetsPage() {
               </AlertDescription>
             </Alert>
             <div className="mt-6">
-              <Button
-                asChild
-                variant="outline"
-                className="bg-gradient-to-r from-primary-500 to-sidebar-500 hover:from-primary-600 hover:to-sidebar-600 text-white border-0"
-              >
+              <Button asChild variant="outline">
                 <Link href="/admin/requests">Back to Requests</Link>
               </Button>
             </div>
@@ -277,41 +311,26 @@ export default function IssueAssetsPage() {
     );
   }
 
-  // Check permissions after data is loaded
   if (!canIssueAssets) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-sidebar-50/40">
-        <div className="relative max-w-6xl mx-auto space-y-8 p-6">
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-8">
-            <div className="text-center py-12">
-              <div className="mx-auto mb-6 w-16 h-16 bg-gradient-to-br from-red-100 to-red-200 rounded-full flex items-center justify-center shadow-lg">
-                <svg
-                  className="w-8 h-8 text-red-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                  />
-                </svg>
-              </div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-red-600 to-red-700 bg-clip-text text-transparent mb-4">
-                Access Denied
-              </h1>
-              <p className="text-gray-600 text-lg mb-6">
-                You don't have permission to issue assets.
-              </p>
-              <Button
-                asChild
-                className="bg-gradient-to-r from-primary-500 to-sidebar-500 hover:from-primary-600 hover:to-sidebar-600 text-white"
-              >
-                <Link href="/admin/requests">Back to Requests</Link>
-              </Button>
-            </div>
+      <div
+        className="min-h-screen"
+        style={{
+          background:
+            "linear-gradient(160deg, var(--org-background), #ffffff 55%)",
+        }}
+      >
+        <div className="max-w-5xl mx-auto p-6">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-10 text-center">
+            <h1 className="text-2xl font-semibold text-slate-900 mb-2">
+              Access Denied
+            </h1>
+            <p className="text-slate-600 mb-6">
+              You don&apos;t have permission to issue assets.
+            </p>
+            <Button asChild className="bg-org-gradient border-0 text-white">
+              <Link href="/admin/requests">Back to Requests</Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -319,17 +338,25 @@ export default function IssueAssetsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-sidebar-50/40">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMwNTk2NjkiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-40"></div>
-
-      <div className="relative max-w-6xl mx-auto space-y-8 p-6">
-        {/* Header */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-8">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
+    <div
+      className="min-h-screen"
+      style={{
+        background:
+          "linear-gradient(160deg, var(--org-background), #ffffff 52%, color-mix(in srgb, var(--org-highlight) 8%, white) 100%)",
+      }}
+    >
+      <div className="max-w-5xl mx-auto space-y-6 p-6">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 sm:p-8">
+          <div className="flex items-start gap-4">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--org-primary-dark), var(--org-primary))",
+              }}
+            >
               <svg
-                className="w-8 h-8 text-white"
+                className="w-6 h-6"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -343,11 +370,17 @@ export default function IssueAssetsPage() {
               </svg>
             </div>
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent">
+              <h1
+                className="text-3xl font-bold tracking-tight"
+                style={{
+                  color:
+                    "color-mix(in srgb, var(--org-primary-dark) 70%, #0f172a 30%)",
+                }}
+              >
                 Issue Assets
               </h1>
-              <p className="text-gray-600 text-lg mt-2">
-                Complete the asset issuance for approved request
+              <p className="text-slate-600 mt-1">
+                Hand over approved items to the requester and record conditions.
               </p>
             </div>
           </div>
@@ -362,81 +395,128 @@ export default function IssueAssetsPage() {
           </Alert>
         )}
 
-        {/* Request Summary */}
-        <Card className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/60 shadow-xl">
-          <CardHeader className="bg-gradient-to-r from-primary-50 to-sidebar-50 rounded-t-2xl border-b border-primary-200/30">
-            <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <div className="w-2 h-2 bg-gradient-to-r from-primary-500 to-sidebar-500 rounded-full"></div>
+        <Card className="rounded-2xl border border-slate-200/80 bg-white shadow-none">
+          <CardHeader
+            className="rounded-t-2xl border-b border-slate-100"
+            style={{
+              background:
+                "linear-gradient(90deg, color-mix(in srgb, var(--org-primary) 10%, white), color-mix(in srgb, var(--org-highlight) 8%, white))",
+            }}
+          >
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <span
+                className="inline-block h-2 w-2 rounded-full"
+                style={{ background: "var(--org-primary)" }}
+              />
               Request Summary
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-700 min-w-[120px]">
-                    Request ID:
+                  <span className="font-medium text-slate-600 min-w-[110px] text-sm">
+                    Request ID
                   </span>
-                  <Badge className="bg-gradient-to-r from-primary-500 to-primary-600 text-white">
-                    #{request.$id.slice(-8)}
+                  <Badge className="bg-org-gradient text-white border-0 font-mono">
+                    #{request.$id.slice(-8).toUpperCase()}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-700 min-w-[120px]">
-                    Requester:
+                  <span className="font-medium text-slate-600 min-w-[110px] text-sm">
+                    Requester
                   </span>
-                  <span className="bg-gray-100 px-3 py-2 rounded border">
+                  <span className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-800 border border-slate-100">
                     {request.requester.name}
                   </span>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="font-semibold text-gray-700 min-w-[120px]">
-                    Purpose:
+                  <span className="font-medium text-slate-600 min-w-[110px] text-sm pt-2">
+                    Purpose
                   </span>
-                  <span className="bg-gray-100 px-3 py-2 rounded border flex-1">
+                  <span className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700 border border-slate-100 flex-1">
                     {request.purpose}
                   </span>
                 </div>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-700 min-w-[140px]">
-                    Issue Date:
+                  <span className="font-medium text-slate-600 min-w-[130px] text-sm">
+                    Issue Date
                   </span>
-                  <span className="bg-green-50 px-3 py-2 rounded border border-green-200 text-green-800">
+                  <span
+                    className="rounded-lg px-3 py-2 text-sm border"
+                    style={{
+                      background:
+                        "color-mix(in srgb, var(--org-primary) 12%, white)",
+                      borderColor:
+                        "color-mix(in srgb, var(--org-primary) 25%, transparent)",
+                      color: "var(--org-primary-dark)",
+                    }}
+                  >
                     {new Date(request.issueDate).toLocaleDateString()}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-700 min-w-[140px]">
-                    Expected Return:
-                  </span>
-                  <span className="bg-blue-50 px-3 py-2 rounded border border-blue-200 text-blue-800">
-                    {new Date(request.expectedReturnDate).toLocaleDateString()}
-                  </span>
+                <div className="flex flex-col gap-1.5">
+                  <Label
+                    htmlFor="expectedReturnDate"
+                    className="font-medium text-slate-600 text-sm"
+                  >
+                    Expected Return Date{" "}
+                    <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="expectedReturnDate"
+                    type="date"
+                    required
+                    value={expectedReturnDate}
+                    onChange={(e) => setExpectedReturnDate(e.target.value)}
+                    className="max-w-xs rounded-xl border-slate-200"
+                    style={{
+                      borderColor:
+                        "color-mix(in srgb, var(--org-highlight) 40%, transparent)",
+                    }}
+                  />
+                  <p className="text-xs text-slate-500">
+                    Required for return reminders on the due date.
+                  </p>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Assets to Issue */}
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-            <div className="w-2 h-2 bg-gradient-to-r from-sidebar-500 to-primary-500 rounded-full"></div>
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ background: "var(--org-highlight)" }}
+            />
             Assets to Issue
           </h2>
           {assets.map((asset) => (
             <Card
               key={asset.$id}
-              className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/60 shadow-xl hover:shadow-2xl transition-all duration-300"
+              className="rounded-2xl border border-slate-200/80 bg-white shadow-none"
             >
-              <CardHeader className="bg-gradient-to-r from-sidebar-50 to-primary-50 rounded-t-2xl border-b border-sidebar-200/30">
-                <CardTitle className="flex items-center justify-between text-xl font-bold text-gray-800">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-lg">
+              <CardHeader
+                className="rounded-t-2xl border-b border-slate-100"
+                style={{
+                  background:
+                    "linear-gradient(90deg, color-mix(in srgb, var(--org-primary) 8%, white), white)",
+                }}
+              >
+                <CardTitle className="flex items-center justify-between text-lg font-semibold text-slate-800 gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, var(--org-primary), var(--org-primary-dark))",
+                      }}
+                    >
                       <svg
-                        className="w-5 h-5 text-white"
+                        className="w-4 h-4"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -449,89 +529,82 @@ export default function IssueAssetsPage() {
                         />
                       </svg>
                     </div>
-                    <span>{asset.name}</span>
+                    <span className="truncate">{asset.name}</span>
+                    {asset.requestQuantity > 1 && (
+                      <Badge className="shrink-0 bg-slate-100 text-slate-700 border-slate-200 font-mono text-xs">
+                        × {asset.requestQuantity}
+                      </Badge>
+                    )}
                   </div>
-                  <Badge className="bg-gradient-to-r from-primary-500 to-primary-600 text-white px-3 py-1 rounded-full">
+                  <Badge
+                    className="shrink-0 border-0 text-white font-mono text-xs"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, var(--org-primary), var(--org-highlight))",
+                    }}
+                  >
                     {asset.assetTag}
                   </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
-                {/* Asset Image Section */}
-                <div className="flex justify-center mb-6">
-                  <div className="relative group">
-                    <div className="w-48 h-48 rounded-2xl overflow-hidden shadow-lg border-4 border-white bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                      {asset.assetImage ? (
-                        <img
-                          src={
-                            asset.assetImage.startsWith("http")
-                              ? asset.assetImage
-                              : assetImageService.getPublicImageUrl(
-                                  asset.assetImage
-                                )
-                          }
-                          alt={asset.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextSibling.style.display = "flex";
-                          }}
-                        />
-                      ) : null}
-                      <div
-                        className={`w-full h-full flex items-center justify-center ${
-                          asset.assetImage ? "hidden" : "flex"
-                        }`}
-                      >
-                        <div className="text-center">
-                          <svg
-                            className="w-16 h-16 text-gray-400 mx-auto mb-2"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.5}
-                              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                            />
-                          </svg>
-                          <p className="text-sm text-gray-500 font-medium">
-                            No Image Available
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-2xl transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                      <Button
-                        size="sm"
-                        className="bg-white/90 text-gray-800 hover:bg-white shadow-lg"
-                        onClick={() => {
-                          if (asset.assetImage) {
-                            const imageUrl = asset.assetImage.startsWith("http")
-                              ? asset.assetImage
-                              : assetImageService.getPublicImageUrl(
-                                  asset.assetImage
-                                );
-                            window.open(imageUrl, "_blank");
-                          }
+                <div className="flex justify-center">
+                  <div
+                    className="w-44 h-44 rounded-2xl overflow-hidden border flex items-center justify-center"
+                    style={{
+                      borderColor:
+                        "color-mix(in srgb, var(--org-primary) 20%, transparent)",
+                      background:
+                        "color-mix(in srgb, var(--org-background) 70%, white)",
+                    }}
+                  >
+                    {asset.assetImage ? (
+                      <img
+                        src={
+                          asset.assetImage.startsWith("http")
+                            ? asset.assetImage
+                            : assetImageService.getPublicImageUrl(
+                                asset.assetImage
+                              )
+                        }
+                        alt={asset.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
                         }}
+                      />
+                    ) : null}
+                    <div
+                      className={`w-full h-full flex-col items-center justify-center text-slate-400 ${
+                        asset.assetImage ? "hidden" : "flex"
+                      }`}
+                    >
+                      <svg
+                        className="w-12 h-12 mb-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        View Full Size
-                      </Button>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                        />
+                      </svg>
+                      <p className="text-sm">No image</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-gradient-to-r from-primary-500 to-sidebar-500 rounded-full"></span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">
                       Pre-Issue Condition
                     </Label>
                     <select
-                      className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-primary-500 focus:ring-4 focus:ring-primary-100 transition-all duration-200 bg-white/80 backdrop-blur-sm"
+                      className="w-full p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--org-primary)]/30 focus:border-[var(--org-primary)]"
                       value={issueData[asset.$id]?.preCondition || ""}
                       onChange={(e) =>
                         updateAssetIssueData(
@@ -550,40 +623,41 @@ export default function IssueAssetsPage() {
                       )}
                     </select>
                   </div>
-
-                  <div className="space-y-3">
-                    <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-gradient-to-r from-sidebar-500 to-primary-500 rounded-full"></span>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">
                       Location
                     </Label>
-                    <div className="p-3 bg-gradient-to-r from-gray-50 to-sidebar-50/30 rounded-xl border border-gray-200">
-                      <p className="text-sm text-gray-700 font-medium">
-                        {asset.locationName}
-                        {asset.roomOrArea && ` - ${asset.roomOrArea}`}
-                      </p>
+                    <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700">
+                      {asset.locationName}
+                      {asset.roomOrArea && ` — ${asset.roomOrArea}`}
                     </div>
                   </div>
                 </div>
 
-                {/* Accessories */}
-                <div className="space-y-4">
-                  <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-gradient-to-r from-primary-500 to-sidebar-500 rounded-full"></span>
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium text-slate-700">
                     Accessories Included
                   </Label>
-                  <div className="flex flex-wrap gap-3 mb-3">
+                  <div className="flex flex-wrap gap-2">
                     {issueData[asset.$id]?.accessories.map(
                       (accessory, index) => (
                         <Badge
                           key={index}
                           variant="outline"
-                          className="flex items-center gap-2 bg-gradient-to-r from-gray-50 to-primary-50/30 border-primary-200 text-primary-800 px-3 py-2 rounded-xl"
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border"
+                          style={{
+                            background:
+                              "color-mix(in srgb, var(--org-primary) 8%, white)",
+                            borderColor:
+                              "color-mix(in srgb, var(--org-primary) 22%, transparent)",
+                            color: "var(--org-primary-dark)",
+                          }}
                         >
                           {accessory}
                           <button
                             type="button"
                             onClick={() => removeAccessory(asset.$id, index)}
-                            className="ml-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full w-5 h-5 flex items-center justify-center transition-all duration-200"
+                            className="text-red-500 hover:text-red-700 ml-0.5"
                           >
                             ×
                           </button>
@@ -593,7 +667,7 @@ export default function IssueAssetsPage() {
                   </div>
                   <div className="flex gap-3">
                     <Input
-                      placeholder="Add accessory..."
+                      placeholder="Add accessory…"
                       value={issueData[asset.$id]?.customAccessory || ""}
                       onChange={(e) =>
                         updateAssetIssueData(
@@ -611,11 +685,10 @@ export default function IssueAssetsPage() {
                           );
                         }
                       }}
-                      className="flex-1 p-3 border-2 border-gray-200 rounded-xl focus:border-primary-500 focus:ring-4 focus:ring-primary-100 transition-all duration-200 bg-white/80 backdrop-blur-sm"
+                      className="flex-1 rounded-xl border-slate-200"
                     />
                     <Button
                       type="button"
-                      variant="outline"
                       size="sm"
                       onClick={() =>
                         addAccessory(
@@ -623,7 +696,7 @@ export default function IssueAssetsPage() {
                           issueData[asset.$id]?.customAccessory
                         )
                       }
-                      className="bg-gradient-to-r from-primary-500 to-sidebar-500 hover:from-primary-600 hover:to-sidebar-600 text-white border-0 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+                      className="bg-org-gradient border-0 text-white px-5"
                     >
                       Add
                     </Button>
@@ -634,11 +707,19 @@ export default function IssueAssetsPage() {
           ))}
         </div>
 
-        {/* Handover Notes */}
-        <Card className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/60 shadow-xl">
-          <CardHeader className="bg-gradient-to-r from-primary-50 to-sidebar-50 rounded-t-2xl border-b border-primary-200/30">
-            <CardTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <div className="w-2 h-2 bg-gradient-to-r from-primary-500 to-sidebar-500 rounded-full"></div>
+        <Card className="rounded-2xl border border-slate-200/80 bg-white shadow-none">
+          <CardHeader
+            className="rounded-t-2xl border-b border-slate-100"
+            style={{
+              background:
+                "linear-gradient(90deg, color-mix(in srgb, var(--org-highlight) 10%, white), white)",
+            }}
+          >
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <span
+                className="inline-block h-2 w-2 rounded-full"
+                style={{ background: "var(--org-highlight)" }}
+              />
               Handover Notes
             </CardTitle>
           </CardHeader>
@@ -646,50 +727,34 @@ export default function IssueAssetsPage() {
             <Textarea
               value={handoverNote}
               onChange={(e) => setHandoverNote(e.target.value)}
-              placeholder="Add any special instructions or notes for the requester..."
+              placeholder="Add any special instructions or notes for the requester…"
               rows={4}
-              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:border-primary-500 focus:ring-4 focus:ring-primary-100 transition-all duration-200 resize-none text-gray-700 placeholder-gray-400 bg-white/80 backdrop-blur-sm"
+              className="w-full rounded-xl border-slate-200 resize-none"
             />
           </CardContent>
         </Card>
 
-        {/* Actions */}
-        <div className="flex gap-4 justify-end">
+        <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 justify-end pb-8">
           <Button
             variant="outline"
             onClick={() => router.back()}
             disabled={issuing}
-            className="px-8 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all duration-200 font-medium rounded-xl"
+            className="px-6"
           >
             Cancel
           </Button>
           <Button
             onClick={handleIssue}
             disabled={issuing}
-            className="px-8 py-3 bg-gradient-to-r from-primary-600 to-sidebar-600 hover:from-primary-700 hover:to-sidebar-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 bg-org-gradient border-0 text-white"
           >
             {issuing ? (
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Issuing Assets...
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Issuing…
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                  />
-                </svg>
-                Issue Assets
-              </div>
+              "Issue Assets"
             )}
           </Button>
         </div>

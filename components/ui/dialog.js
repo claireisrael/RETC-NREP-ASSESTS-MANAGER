@@ -62,14 +62,14 @@ function DialogContent({ children, className = "", ...props }) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-gradient-to-br from-black/40 via-primary-900/20 to-sidebar-900/20 backdrop-blur-md z-[9999] animate-in fade-in duration-300"
+        className="fixed inset-0 bg-black/45 backdrop-blur-sm z-[9999] animate-in fade-in duration-200"
         onClick={() => setOpen(false)}
       />
 
       {/* Dialog */}
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
         <div
-          className={`bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto relative z-[10000] animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 ${className}`}
+          className={`bg-white rounded-2xl shadow-xl w-full max-h-[90vh] overflow-y-auto relative z-[10000] animate-in zoom-in-95 slide-in-from-bottom-2 duration-200 max-w-md ${className}`}
           onClick={(e) => e.stopPropagation()}
           {...props}
         >
@@ -117,7 +117,7 @@ function DialogDescription({ children, className = "", ...props }) {
 function DialogFooter({ children, className = "", ...props }) {
   return (
     <div
-      className={`px-6 py-4 border-t flex justify-end gap-2 ${className}`}
+      className={`px-6 py-4 border-t flex justify-end gap-3 ${className}`}
       {...props}
     >
       {children}

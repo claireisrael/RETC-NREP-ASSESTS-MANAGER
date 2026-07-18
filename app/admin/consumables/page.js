@@ -57,6 +57,7 @@ import {
   MapPin,
   FileText,
   Users,
+  UserCheck,
   CheckCircle,
   Clock,
   ShoppingCart,
@@ -64,7 +65,13 @@ import {
   Grid3X3,
   RefreshCw,
 } from "lucide-react";
-import { assetsService, projectsService } from "../../../lib/appwrite/provider.js";
+import {
+  assetsService,
+  projectsService,
+  assetIssuesService,
+  staffService,
+} from "../../../lib/appwrite/provider.js";
+import { buildRecipientsMap } from "../../../lib/utils/holders.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { useToastContext } from "../../../components/providers/toast-provider";
 import { useConfirmation } from "../../../components/ui/confirmation-dialog";
@@ -103,6 +110,8 @@ export default function AdminConsumablesPage() {
   const { theme, orgCode } = useOrgTheme();
   const [staff, setStaff] = useState(null);
   const [consumables, setConsumables] = useState([]);
+  const [recipientsMap, setRecipientsMap] = useState(() => new Map());
+  const [staffMap, setStaffMap] = useState(() => new Map());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -208,9 +217,7 @@ export default function AdminConsumablesPage() {
   const actionEditButtonClass = isNrepOrg
     ? "bg-[var(--org-highlight)]/14 text-[var(--org-highlight)] border border-[var(--org-highlight)]/30 hover:bg-[var(--org-highlight)]/20 hover:text-white hover:shadow-lg"
     : "bg-primary-50 text-primary-600 border border-primary-100 hover:bg-primary-100 hover:text-primary-800";
-  const locationIconClass = isNrepOrg
-    ? "text-[var(--org-primary)]/70"
-    : "text-slate-400";
+  const locationIconClass = "text-red-600";
   const locationTextClass = isNrepOrg
     ? "text-[var(--org-primary-dark)]"
     : "text-slate-700";
@@ -319,13 +326,14 @@ export default function AdminConsumablesPage() {
   const checkPermissionsAndLoadData = async () => {
     try {
       const currentStaff = await getCurrentStaff();
-      if (!currentStaff || !permissions.canManageAssets(currentStaff)) {
+      if (!currentStaff || !permissions.canManageConsumables(currentStaff)) {
         window.location.href = "/unauthorized";
         return;
       }
       setStaff(currentStaff);
       await loadConsumables();
       await loadProjects(); // Load projects here
+      await loadRecipients();
     } catch (error) {
       // Silent fail for data loading
     } finally {
@@ -340,6 +348,39 @@ export default function AdminConsumablesPage() {
     } catch (error) {
       // Silent fail for consumables loading
     }
+  };
+
+  // Load issue records + staff once, and build a per-consumable recipients map.
+  const loadRecipients = async () => {
+    try {
+      const [issuesResult, staffResult] = await Promise.all([
+        assetIssuesService.list([Query.orderDesc("issuedAt")]),
+        staffService.list(),
+      ]);
+      setRecipientsMap(buildRecipientsMap(issuesResult?.documents || []));
+      const map = new Map();
+      (staffResult?.documents || []).forEach((member) => {
+        if (member?.$id) map.set(member.$id, member.name || "Unknown");
+      });
+      setStaffMap(map);
+    } catch (error) {
+      console.error("Failed to load consumable recipients:", error);
+    }
+  };
+
+  // Most recent recipient name for a consumable (or null if none recorded).
+  const getLatestRecipientName = (consumableId) => {
+    const rows = recipientsMap.get(consumableId);
+    if (!rows || rows.length === 0) return null;
+    const latest = rows[0];
+    if (latest.name) return latest.name;
+    if (latest.staffId) return staffMap.get(latest.staffId) || "Unknown";
+    return "Unknown";
+  };
+
+  const getRecipientCount = (consumableId) => {
+    const rows = recipientsMap.get(consumableId);
+    return rows ? rows.length : 0;
   };
 
   const loadProjects = useCallback(async () => {
@@ -1064,7 +1105,7 @@ export default function AdminConsumablesPage() {
                     {/* Status & Location */}
                     <div className="bg-purple-50 p-6 rounded-lg space-y-6">
                       <div className="flex items-center space-x-2">
-                        <MapPin className="h-5 w-5 text-purple-600" />
+                        <MapPin className="h-5 w-5 text-red-600" />
                         <h3 className="text-lg font-semibold text-gray-900">
                           Status & Location
                         </h3>
@@ -1586,6 +1627,9 @@ export default function AdminConsumablesPage() {
                     <TableHead className="font-semibold text-slate-700 py-4 px-6">
                       Location
                     </TableHead>
+                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
+                      Issued To
+                    </TableHead>
                     <TableHead className="font-semibold text-slate-700 py-4 px-6 text-center">
                       Actions
                     </TableHead>
@@ -1663,6 +1707,24 @@ export default function AdminConsumablesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="py-4 px-6">
+                          {getLatestRecipientName(consumable.$id) ? (
+                            <div className="flex items-center space-x-2">
+                              <UserCheck className="h-4 w-4 text-amber-600" />
+                              <span className="text-sm font-medium text-slate-700">
+                                {getLatestRecipientName(consumable.$id)}
+                                {getRecipientCount(consumable.$id) > 1 && (
+                                  <span className="text-xs text-slate-400">
+                                    {" "}
+                                    +{getRecipientCount(consumable.$id) - 1} more
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-slate-400">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-4 px-6">
                           <div className="flex items-center justify-center space-x-2">
                             <Button
                               asChild
@@ -1702,7 +1764,7 @@ export default function AdminConsumablesPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12">
+                      <TableCell colSpan={7} className="text-center py-12">
                         <div className="flex flex-col items-center space-y-4">
                           <div className="p-4 bg-gray-100 rounded-full">
                             <Package className="h-8 w-8 text-gray-400" />

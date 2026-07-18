@@ -19,7 +19,13 @@
     "test:auth:login": "jest __tests__/auth/login.test.js --verbose",
     "test:auth:integration": "jest __tests__/auth/auth-integration.test.js --verbose",
     "test:auth:e2e": "jest __tests__/auth/auth-e2e.test.js --verbose",
-    "test:auth:diagnostic": "jest __tests__/auth/auth-diagnostic.test.js --verbose --no-coverage"
+    "test:auth:diagnostic": "jest __tests__/auth/auth-diagnostic.test.js --verbose --no-coverage",
+    "migrate:users": "node scripts/migrate-users.mjs",
+    "migrate:users:commit": "node scripts/migrate-users.mjs --commit",
+    "assign:roles": "node scripts/assign-staff-roles.mjs",
+    "reminders:setup": "node scripts/setup-return-reminders.mjs",
+    "reminders:send": "node scripts/send-return-reminders.mjs",
+    "reminders:dry-run": "node scripts/send-return-reminders.mjs --dry-run"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.6.0",
@@ -72,6 +78,7 @@
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.0.5",
     "jest-environment-jsdom": "^30.0.5",
+    "node-appwrite": "^27.0.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17"
   },

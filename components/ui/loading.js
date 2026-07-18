@@ -125,7 +125,7 @@ export function PageLoading({ message = "Loading...", className = "" }) {
 
   return (
     <div
-      className={`relative flex items-center justify-center min-h-screen overflow-hidden ${className}`}
+      className={`relative flex items-center justify-center w-full min-h-screen overflow-hidden ${className}`}
       style={{
         backgroundColor,
         backgroundImage: `radial-gradient(circle at 18% 18%, ${primary}1f, transparent 52%), radial-gradient(circle at 82% 78%, ${accent}1a, transparent 60%)`,

@@ -30,7 +30,12 @@ export default function LayoutProvider({ children }) {
 
   // Determine route types early for hook configuration
   const isNoLayout =
-    pathname.startsWith("/login") || pathname.startsWith("/setup");
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/setup") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/select-org") ||
+    pathname.startsWith("/unauthorized");
   const isTopNavOnly = pathname.startsWith("/guest");
 
   // Session timeout configuration
@@ -142,8 +147,15 @@ export default function LayoutProvider({ children }) {
       window.removeEventListener("session-warning", handleSessionWarning);
   }, [toast]);
 
-  // Define routes that don't need any layout
-  const noLayoutRoutes = ["/login", "/setup", "/select-org"];
+  // Define routes that don't need any layout (public auth screens)
+  const noLayoutRoutes = [
+    "/login",
+    "/setup",
+    "/select-org",
+    "/unauthorized",
+    "/forgot-password",
+    "/reset-password",
+  ];
 
   // Define routes that only need top navigation (like guest portal)
   const topNavOnlyRoutes = ["/guest"];
@@ -179,6 +191,8 @@ export default function LayoutProvider({ children }) {
     !finalIsNoLayout &&
     !finalIsTopNavOnly &&
     !pathname.startsWith("/login") &&
+    !pathname.startsWith("/forgot-password") &&
+    !pathname.startsWith("/reset-password") &&
     !pathname.startsWith("/unauthorized");
 
   useEffect(() => {

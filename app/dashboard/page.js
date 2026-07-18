@@ -579,59 +579,73 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6">
-              <div className="mt-4 grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2 mx-auto">
-                <Button
-                  asChild
-                  className="w-full h-24 flex-col justify-center items-center rounded-2xl bg-org-gradient text-white shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5"
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {/* Primary actions */}
+                <Link
+                  href="/requests/new?type=asset"
+                  className="group relative flex items-center gap-4 overflow-hidden rounded-2xl bg-org-gradient p-4 text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                 >
-                  <Link href="/requests/new?type=asset">
-                    <Send className="w-6 h-6 mb-2" />
-                    <span>Request Asset</span>
-                  </Link>
-                </Button>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+                    <Send className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold leading-tight">Request Asset</p>
+                    <p className="text-xs text-white/80">Borrow equipment</p>
+                  </div>
+                </Link>
 
-                <Button
-                  asChild
-                  className="w-full h-24 flex-col justify-center items-center rounded-2xl bg-white border border-[var(--org-primary)] text-[var(--org-primary)] shadow-sm hover:shadow-md transition-transform hover:-translate-y-0.5"
+                <Link
+                  href="/requests/new?type=consumable"
+                  className="group relative flex items-center gap-4 overflow-hidden rounded-2xl bg-org-gradient p-4 text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                 >
-                  <Link href="/requests/new?type=consumable">
-                    <ShoppingCart className="w-6 h-6 mb-2" />
-                    <span>Request Consumable</span>
-                  </Link>
-                </Button>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+                    <ShoppingCart className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold leading-tight">Request Consumable</p>
+                    <p className="text-xs text-white/80">Get supplies</p>
+                  </div>
+                </Link>
 
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full h-24 flex-col justify-center items-center rounded-2xl border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft"
+                {/* Secondary actions */}
+                <Link
+                  href="/assets"
+                  className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--org-primary)]/40 hover:shadow-md"
                 >
-                  <Link href="/assets">
-                    <Search className="w-6 h-6 mb-2" />
-                    <span>Browse Assets</span>
-                  </Link>
-                </Button>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-org-primary-soft text-[var(--org-primary)] transition-colors duration-200 group-hover:bg-org-gradient group-hover:text-white">
+                    <Search className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold leading-tight text-slate-900">Browse Assets</p>
+                    <p className="text-xs text-slate-500">Explore inventory</p>
+                  </div>
+                </Link>
 
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full h-24 flex-col justify-center items-center rounded-2xl border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft"
+                <Link
+                  href="/consumables"
+                  className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--org-primary)]/40 hover:shadow-md"
                 >
-                  <Link href="/consumables">
-                    <ShoppingCart className="w-6 h-6 mb-2" />
-                    <span>View Stock</span>
-                  </Link>
-                </Button>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-org-primary-soft text-[var(--org-primary)] transition-colors duration-200 group-hover:bg-org-gradient group-hover:text-white">
+                    <ShoppingCart className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold leading-tight text-slate-900">View Stock</p>
+                    <p className="text-xs text-slate-500">Check supplies</p>
+                  </div>
+                </Link>
 
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full h-24 flex-col justify-center items-center rounded-2xl border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft"
+                <Link
+                  href="/requests"
+                  className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--org-primary)]/40 hover:shadow-md sm:col-span-2"
                 >
-                  <Link href="/requests">
-                    <Eye className="w-6 h-6 mb-2" />
-                    <span>My Requests</span>
-                  </Link>
-                </Button>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-org-primary-soft text-[var(--org-primary)] transition-colors duration-200 group-hover:bg-org-gradient group-hover:text-white">
+                    <Eye className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold leading-tight text-slate-900">My Requests</p>
+                    <p className="text-xs text-slate-500">Track your submissions</p>
+                  </div>
+                </Link>
               </div>
             </CardContent>
           </Card>

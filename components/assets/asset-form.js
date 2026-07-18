@@ -12,11 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Checkbox } from "../ui/checkbox"
 import { Alert, AlertDescription } from "../ui/alert"
 import { ImageUpload } from "../ui/image-upload"
+import { AccessoriesEditor } from "./accessories-editor"
 import { assetsService, departmentsService, staffService, projectsService } from "../../lib/appwrite/provider.js"
 import { ENUMS } from "../../lib/appwrite/config.js"
 import { getCurrentStaff } from "../../lib/utils/auth.js"
 import { validateAssetTag } from "../../lib/utils/validation.js"
 import { formatCategory, mapToPublicCondition } from "../../lib/utils/mappings.js"
+import { getSubcategoriesForCategory, hasPredefinedSubcategories } from "../../lib/constants/asset-subcategories.js"
 import { useOrgTheme } from "../providers/org-theme-provider"
 import { getCurrentOrgId } from "../../lib/utils/org"
 import { assetImageService } from "../../lib/appwrite/image-service.js"
@@ -91,6 +93,9 @@ export function AssetForm({ asset, onSuccess }) {
     model: "",
     manufacturer: "",
 
+    // Accessories that ship with this asset (e.g. Charger, Remote, HDMI cable)
+    accessories: [],
+
     // Ownership
     departmentId: "",
     custodianStaffId: "",
@@ -133,6 +138,7 @@ export function AssetForm({ asset, onSuccess }) {
         subcategory: asset.subcategory || "",
         model: asset.model || "",
         manufacturer: asset.manufacturer || "",
+        accessories: Array.isArray(asset.accessories) ? asset.accessories : [],
         departmentId: asset.departmentId || "",
         custodianStaffId: asset.custodianStaffId || "",
         availableStatus: asset.availableStatus || ENUMS.AVAILABLE_STATUS.AWAITING_DEPLOY,
@@ -240,8 +246,13 @@ export function AssetForm({ asset, onSuccess }) {
       // RETC doesn't use projects - only NREP requires projectId
       const { projectId: formProjectId, ...formDataWithoutProjectId } = formData;
       
+      const cleanedAccessories = Array.isArray(formData.accessories)
+        ? formData.accessories.map((a) => a.trim()).filter(Boolean)
+        : []
+
       const submitData = {
         ...formDataWithoutProjectId,
+        accessories: cleanedAccessories,
         publicImages: JSON.stringify(mergedPublicImages || []),
         ...(resolvedAssetImage ? { assetImage: resolvedAssetImage } : {}),
         itemType: asset?.itemType || ENUMS.ITEM_TYPE.ASSET,
@@ -332,6 +343,22 @@ export function AssetForm({ asset, onSuccess }) {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  // Changing category resets the subcategory unless the current value is still
+  // valid within the newly selected category's predefined list.
+  const handleCategoryChange = (value) => {
+    setFormData((prev) => {
+      const options = getSubcategoriesForCategory(value)
+      const stillValid = options.some((opt) => opt.value === prev.subcategory)
+      return {
+        ...prev,
+        category: value,
+        subcategory: options.length > 0 ? (stillValid ? prev.subcategory : "") : prev.subcategory,
+      }
+    })
+  }
+
+  const subcategoryOptions = getSubcategoriesForCategory(formData.category)
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
@@ -392,7 +419,7 @@ export function AssetForm({ asset, onSuccess }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="category">Category *</Label>
-              <Select value={formData.category} onValueChange={(value) => updateField("category", value)}>
+              <Select value={formData.category} onValueChange={handleCategoryChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
@@ -408,12 +435,32 @@ export function AssetForm({ asset, onSuccess }) {
 
             <div className="space-y-2">
               <Label htmlFor="subcategory">Subcategory</Label>
-              <Input
-                id="subcategory"
-                value={formData.subcategory}
-                onChange={(e) => updateField("subcategory", e.target.value)}
-                disabled={loading}
-              />
+              {subcategoryOptions.length > 0 ? (
+                <Select
+                  value={formData.subcategory}
+                  onValueChange={(value) => updateField("subcategory", value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select subcategory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subcategoryOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="subcategory"
+                  value={formData.subcategory}
+                  onChange={(e) => updateField("subcategory", e.target.value)}
+                  placeholder={formData.category ? "e.g. Router, Desk" : "Select a category first"}
+                  disabled={loading}
+                />
+              )}
             </div>
           </div>
 
@@ -438,6 +485,24 @@ export function AssetForm({ asset, onSuccess }) {
               />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Accessories */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Accessories</CardTitle>
+          <p className="text-sm text-slate-500">
+            List items that go with this asset (e.g. charger, remote, HDMI cable). Requesters can attach these when borrowing.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <AccessoriesEditor
+            value={formData.accessories}
+            onChange={(next) => updateField("accessories", next)}
+            disabled={loading}
+            itemLabel="asset"
+          />
         </CardContent>
       </Card>
 

@@ -57,6 +57,7 @@ import {
   MapPin,
   FileText,
   Users,
+  UserCheck,
   CheckCircle,
   Clock,
   Image,
@@ -66,7 +67,11 @@ import {
 import {
   assetsService,
   projectsService,
+  staffService,
+  assetIssuesService,
 } from "../../../lib/appwrite/provider.js";
+import { buildRecipientsMap } from "../../../lib/utils/holders.js";
+import { Query } from "appwrite";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { useToastContext } from "../../../components/providers/toast-provider";
 import { useConfirmation } from "../../../components/ui/confirmation-dialog";
@@ -76,6 +81,11 @@ import {
   getStatusBadgeColor,
   getConditionBadgeColor,
 } from "../../../lib/utils/mappings.js";
+import {
+  ASSET_SUBCATEGORIES,
+  getSubcategoriesForCategory,
+  assetMatchesSubcategory,
+} from "../../../lib/constants/asset-subcategories.js";
 import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 import { PageLoading } from "../../../components/ui/loading";
 import { buildAssetTag } from "../../../lib/utils/asset-tag.js";
@@ -89,9 +99,12 @@ export default function AdminAssetManagement() {
   const { theme, orgCode } = useOrgTheme();
   const [staff, setStaff] = useState(null);
   const [assets, setAssets] = useState([]);
+  const [staffMap, setStaffMap] = useState(() => new Map());
+  const [recipientsMap, setRecipientsMap] = useState(() => new Map());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterSubcategory, setFilterSubcategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCondition, setFilterCondition] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
@@ -257,11 +270,44 @@ export default function AdminAssetManagement() {
       setStaff(currentStaff);
       await loadAssets();
       await loadProjects();
+      await loadStaffMap();
     } catch (error) {
       // Silent fail for data loading
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadStaffMap = async () => {
+    try {
+      const [staffResult, issuesResult] = await Promise.all([
+        staffService.list(),
+        assetIssuesService.list([Query.orderDesc("issuedAt")]),
+      ]);
+      const map = new Map();
+      (staffResult?.documents || []).forEach((member) => {
+        if (member?.$id) map.set(member.$id, member.name || "Unknown");
+      });
+      setStaffMap(map);
+      setRecipientsMap(buildRecipientsMap(issuesResult?.documents || []));
+    } catch (error) {
+      console.error("Failed to load staff/holders for lookup:", error);
+    }
+  };
+
+  // Name of the person currently holding an asset, or null when available.
+  // Uses the captured recipient name from the latest issue record.
+  const getHeldByName = (asset) => {
+    if (!asset || asset.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE) {
+      return null;
+    }
+    const rows = recipientsMap.get(asset.$id);
+    const latest = rows && rows.length > 0 ? rows[0] : null;
+    if (latest?.name) return latest.name;
+    if (latest?.staffId) return staffMap.get(latest.staffId) || "Unknown";
+    // Fallback to the asset's custodian only if no issue record exists.
+    if (asset.custodianStaffId) return staffMap.get(asset.custodianStaffId) || "Unknown";
+    return null;
   };
 
   const loadAssets = async () => {
@@ -583,6 +629,10 @@ export default function AdminAssetManagement() {
 
     const matchesCategory =
       filterCategory === "all" || asset.category === filterCategory;
+    const matchesSubcategory = assetMatchesSubcategory(
+      asset,
+      filterSubcategory
+    );
     const matchesStatus =
       filterStatus === "all" || asset.availableStatus === filterStatus;
     const matchesCondition =
@@ -605,6 +655,7 @@ export default function AdminAssetManagement() {
     return (
       matchesSearch &&
       matchesCategory &&
+      matchesSubcategory &&
       matchesStatus &&
       matchesCondition &&
       matchesProject
@@ -614,10 +665,27 @@ export default function AdminAssetManagement() {
   const clearFilters = () => {
     setSearchTerm("");
     setFilterCategory("all");
+    setFilterSubcategory("all");
     setFilterStatus("all");
     setFilterCondition("all");
     setProjectFilter(defaultProjectId && isNrepOrg ? defaultProjectId : "all");
   };
+
+  // Subcategory options for the filter: the selected category's predefined list,
+  // or a de-duplicated union of all predefined subcategories.
+  const subcategoryFilterOptions = (() => {
+    if (filterCategory && filterCategory !== "all") {
+      return getSubcategoriesForCategory(filterCategory);
+    }
+    const seen = new Set();
+    return Object.values(ASSET_SUBCATEGORIES)
+      .flat()
+      .filter(({ value }) => {
+        if (seen.has(value)) return false;
+        seen.add(value);
+        return true;
+      });
+  })();
 
   if (loading) {
     return <PageLoading message="Loading assets..." />;
@@ -652,7 +720,7 @@ export default function AdminAssetManagement() {
     : "bg-orange-500/20 text-orange-600 border-orange-500/30";
 
   const categoryBadgeClass = isNrepOrg
-    ? "bg-[var(--org-highlight)]/15 text-[var(--org-highlight)] border-[var(--org-highlight)]/25"
+    ? "bg-slate-100 text-slate-700 border-slate-200"
     : "bg-sidebar-50 text-sidebar-700 border-sidebar-200";
   const headerBadgeClass = isNrepOrg
     ? "bg-[var(--org-primary)]/18 text-[var(--org-primary)] border-[var(--org-primary)]/25"
@@ -676,28 +744,33 @@ export default function AdminAssetManagement() {
     ? "group-hover:text-[var(--org-primary)]"
     : "group-hover:text-sidebar-700";
 
-  const locationIconClass = isNrepOrg
-    ? "text-[var(--org-primary)]/70"
-    : "text-slate-400";
+  const locationIconClass = "text-red-600";
   const locationTextClass = isNrepOrg
     ? "text-[var(--org-primary-dark)]"
     : "text-slate-700";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
-      <div className="container mx-auto p-6 space-y-8 max-w-7xl">
-        {/* Modern Header */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
-          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
-            <div className="space-y-1">
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sidebar-900 to-sidebar-900 bg-clip-text text-transparent">
-                  Asset Management
-                </h1>
-                <p className="text-slate-600 font-medium">
-                  Manage system assets, inventory, and equipment
-                </p>
-              </div>
+    <div
+      className="admin-assets-page min-h-screen"
+      style={{ background: "var(--org-background)" }}
+    >
+      <div className="container mx-auto p-6 space-y-6 max-w-7xl">
+        {/* Header */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6">
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
+            <div>
+              <h1
+                className="text-3xl font-bold tracking-tight"
+                style={{
+                  color:
+                    "color-mix(in srgb, var(--org-primary-dark) 72%, #0f172a 28%)",
+                }}
+              >
+                Asset Management
+              </h1>
+              <p className="text-slate-600 mt-1">
+                Manage system assets, inventory, and equipment
+              </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -707,18 +780,12 @@ export default function AdminAssetManagement() {
                 disabled={exporting}
                 title="Download all assets from the database as a PDF file"
                 variant="outline"
-                className="relative border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft transition-all duration-300 ease-out group overflow-hidden hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="border-[var(--org-primary)] text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
               >
-                <div className="flex items-center justify-center relative z-10">
-                  <Download
-                    className={`w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300 ${
-                      exporting ? "animate-spin" : ""
-                    }`}
-                  />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    {exporting ? "Generating PDF..." : "Download PDF"}
-                  </span>
-                </div>
+                <Download
+                  className={`w-4 h-4 mr-2 ${exporting ? "animate-spin" : ""}`}
+                />
+                {exporting ? "Generating PDF..." : "Download PDF"}
               </Button>
 
               {/* Download Filtered Results Button */}
@@ -731,33 +798,21 @@ export default function AdminAssetManagement() {
                   disabled={exporting}
                   title="Download only the currently filtered/displayed assets as a PDF file"
                   variant="outline"
-                  className="relative border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft transition-all duration-300 ease-out group overflow-hidden hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="border-[var(--org-primary)] text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
                 >
-                  <div className="flex items-center justify-center relative z-10">
-                    <Download
-                      className={`w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300 ${
-                        exporting ? "animate-spin" : ""
-                      }`}
-                    />
-                    <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                      {exporting
-                        ? "Generating PDF..."
-                        : "Download PDF (Filtered)"}
-                    </span>
-                  </div>
+                  <Download
+                    className={`w-4 h-4 mr-2 ${exporting ? "animate-spin" : ""}`}
+                  />
+                  {exporting ? "Generating PDF..." : "Download PDF (Filtered)"}
                 </Button>
               )}
 
               <Button
                 onClick={() => router.push("/admin/assets/new")}
-                className="relative bg-org-gradient text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:-translate-y-0.5"
+                className="bg-org-gradient text-white border-0"
               >
-                <div className="flex items-center justify-center relative z-10">
-                  <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 group-hover:scale-110 transition-all duration-300" />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Add Asset
-                  </span>
-                </div>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Asset
               </Button>
 
               {/* Removed Dialog - Now using dedicated page at /admin/assets/new */}
@@ -1058,7 +1113,7 @@ export default function AdminAssetManagement() {
                     {/* Status & Location */}
                     <div className="bg-purple-50 p-6 rounded-lg space-y-6">
                       <div className="flex items-center space-x-2">
-                        <MapPin className="h-5 w-5 text-purple-600" />
+                        <MapPin className="h-5 w-5 text-red-600" />
                         <h3 className="text-lg font-semibold text-gray-900">
                           Status & Location
                         </h3>
@@ -1314,14 +1369,14 @@ export default function AdminAssetManagement() {
             </div>
           </div>
 
-          {/* Modern Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {/* Total Assets Card */}
-            <Card className={`${metricCardClass} border-0 shadow-lg hover:shadow-xl transition-all duration-300 group`}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-3 ${metricIconClass} rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                    <Package className="h-6 w-6 text-white" />
+            <Card className={`${metricCardClass} border border-slate-200/80 !shadow-none`}>
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`p-2.5 ${metricIconClass} rounded-xl`}>
+                    <Package className="h-5 w-5 text-white" />
                   </div>
                   <Badge className={headerBadgeClass}>
                     Total
@@ -1355,11 +1410,11 @@ export default function AdminAssetManagement() {
             </Card>
 
             {/* Available Assets Card */}
-            <Card className={`${primaryCardClass} border-0 shadow-lg hover:shadow-xl transition-all duration-300 group`}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-3 ${primaryIconClass} rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                    <CheckCircle className="h-6 w-6 text-white" />
+            <Card className={`${primaryCardClass} border border-slate-200/80 !shadow-none`}>
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`p-2.5 ${primaryIconClass} rounded-xl`}>
+                    <CheckCircle className="h-5 w-5 text-white" />
                   </div>
                   <Badge className={primaryBadgeClass}>
                     Ready
@@ -1389,11 +1444,11 @@ export default function AdminAssetManagement() {
             </Card>
 
             {/* In Use Assets Card */}
-            <Card className={`${highlightCardClass} border-0 shadow-lg hover:shadow-xl transition-all duration-300 group`}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-3 ${highlightIconClass} rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                    <Clock className="h-6 w-6 text-white" />
+            <Card className={`${highlightCardClass} border border-slate-200/80 !shadow-none`}>
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`p-2.5 ${highlightIconClass} rounded-xl`}>
+                    <Clock className="h-5 w-5 text-white" />
                   </div>
                   <Badge className={highlightBadgeClass}>
                     Active
@@ -1423,13 +1478,13 @@ export default function AdminAssetManagement() {
             </Card>
 
             {/* Maintenance Assets Card */}
-            <Card className="bg-gradient-to-br from-red-50 to-red-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <AlertTriangle className="h-6 w-6 text-white" />
+            <Card className="bg-white border border-slate-200/80 !shadow-none">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2.5 bg-gradient-to-br from-red-500 to-red-600 rounded-xl">
+                    <AlertTriangle className="h-5 w-5 text-white" />
                   </div>
-                  <Badge className="bg-red-500/20 text-red-600 border-red-500/30">
+                  <Badge className="bg-red-50 text-red-600 border-red-200">
                     Alert
                   </Badge>
                 </div>
@@ -1452,32 +1507,54 @@ export default function AdminAssetManagement() {
             </Card>
 
             {/* Staff Card */}
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <Users className="h-6 w-6 text-white" />
+            <Card
+              className="border border-slate-200/80 !shadow-none"
+              style={{
+                background:
+                  "linear-gradient(135deg, color-mix(in srgb, var(--org-primary-dark) 10%, white), white)",
+              }}
+            >
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div
+                    className="p-2.5 rounded-xl"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, var(--org-primary-dark), var(--org-primary))",
+                    }}
+                  >
+                    <Users className="h-5 w-5 text-white" />
                   </div>
-                  <Badge className="bg-purple-500/20 text-purple-600 border-purple-500/30">
+                  <Badge className={headerBadgeClass}>
                     Team
                   </Badge>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">5</div>
+                  <div className="text-3xl font-bold text-slate-900">
+                    {staffMap.size || 0}
+                  </div>
                   <p className="text-sm font-medium text-slate-600">Staff</p>
-                  <p className="text-xs text-purple-600">2 departments</p>
+                  <p className="text-xs text-[var(--org-primary-dark)]">
+                    Linked custodians
+                  </p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Modern Filters */}
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-20">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
+          {/* Filters */}
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 relative z-20 shadow-none">
+            <div className="flex items-center space-x-3 mb-5">
+              <div
+                className="p-2 rounded-xl"
+                style={{
+                  background:
+                    "linear-gradient(135deg, var(--org-primary), var(--org-primary-dark))",
+                }}
+              >
                 <Filter className="w-5 h-5 text-white" />
               </div>
-              <h2 className="text-xl font-semibold text-slate-900">
+              <h2 className="text-lg font-semibold text-slate-900">
                 Filters & Search
               </h2>
             </div>
@@ -1504,7 +1581,10 @@ export default function AdminAssetManagement() {
                 </Label>
                 <Select
                   value={filterCategory}
-                  onValueChange={setFilterCategory}
+                  onValueChange={(value) => {
+                    setFilterCategory(value);
+                    setFilterSubcategory("all");
+                  }}
                 >
                   <SelectTrigger className="h-11 border-gray-200 focus:border-primary-500 focus:ring-primary-500/20 transition-all duration-200">
                     <SelectValue placeholder="All Categories" />
@@ -1519,6 +1599,30 @@ export default function AdminAssetManagement() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {subcategoryFilterOptions.length > 0 && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium text-slate-700">
+                    Subcategory
+                  </Label>
+                  <Select
+                    value={filterSubcategory}
+                    onValueChange={setFilterSubcategory}
+                  >
+                    <SelectTrigger className="h-11 border-gray-200 focus:border-primary-500 focus:ring-primary-500/20 transition-all duration-200">
+                      <SelectValue placeholder="All Subcategories" />
+                    </SelectTrigger>
+                    <SelectContent className="z-30">
+                      <SelectItem value="all">All Subcategories</SelectItem>
+                      {subcategoryFilterOptions.map((sub) => (
+                        <SelectItem key={sub.value} value={sub.value}>
+                          {sub.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-slate-700">
@@ -1588,12 +1692,18 @@ export default function AdminAssetManagement() {
             </div>
           </div>
 
-          {/* Modern Assets Table */}
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl overflow-hidden relative z-10">
-            <div className="p-6 border-b border-gray-200/60">
+          {/* Assets Table */}
+          <div className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden relative z-10 shadow-none">
+            <div className="p-6 border-b border-slate-100">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-xl shadow-lg">
+                  <div
+                    className="p-2 rounded-xl"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, var(--org-primary-dark), var(--org-primary))",
+                    }}
+                  >
                     <FileText className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -1665,6 +1775,9 @@ export default function AdminAssetManagement() {
                     )}
                     <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
                       Location
+                    </TableHead>
+                    <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                      Held By
                     </TableHead>
                     <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700 text-right">
                       Actions
@@ -1749,6 +1862,18 @@ export default function AdminAssetManagement() {
                           </div>
                         </TableCell>
                         <TableCell className="py-4 px-6">
+                          {getHeldByName(asset) ? (
+                            <div className="flex items-center space-x-2">
+                              <UserCheck className="h-4 w-4 text-amber-600" />
+                              <span className="text-sm font-medium text-slate-700">
+                                {getHeldByName(asset)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-slate-400">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-4 px-6">
                           <div className="flex items-center justify-center space-x-2">
                             <Button
                               asChild
@@ -1784,7 +1909,7 @@ export default function AdminAssetManagement() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={isNrepOrg ? 8 : 7} className="text-center py-12">
                         <div className="flex flex-col items-center space-y-4">
                           <div className="p-4 bg-gray-100 rounded-full">
                             <Package className="h-8 w-8 text-gray-400" />
@@ -1822,7 +1947,7 @@ export default function AdminAssetManagement() {
                       return (
                         <div
                           key={`${asset.$id}-card`}
-                          className="group relative overflow-hidden rounded-2xl border border-gray-200/70 bg-white/95 shadow-lg hover:shadow-xl transition-all duration-300"
+                          className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white !shadow-none hover:border-[var(--org-primary)]/35 transition-all duration-200"
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-[var(--org-primary)]/12 via-[var(--org-highlight)]/8 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                           <div className="relative z-10 p-6 space-y-5">
@@ -1881,7 +2006,7 @@ export default function AdminAssetManagement() {
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600 mb-3">
                               <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-gray-400" />
+                                <MapPin className="h-4 w-4 text-red-600" />
                                 <span>
                                   {asset.locationName ||
                                     asset.roomOrArea ||

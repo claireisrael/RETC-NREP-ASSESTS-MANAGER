@@ -1,6 +1,7 @@
 import { NodemailerService } from '../../../../lib/services/nodemailer.js'
 import { renderEmailTemplate } from "../../../../lib/services/email-templates.js"
 import { settingsService } from "../../../../lib/appwrite/server-provider.js"
+import { resolveEmailBranding } from "../../../../lib/utils/email-branding.js"
 import { NextResponse } from 'next/server'
 
 export async function POST(request) {
@@ -17,15 +18,22 @@ export async function POST(request) {
 
     console.log(`Processing email notification: ${type} for ${recipient}`)
 
-    // Get system branding settings if not provided
-    let emailBranding = branding
-    if (!emailBranding) {
+    // Prefer requester/request org branding (NREP vs RETC). Fall back to settings.
+    let emailBranding = resolveEmailBranding({
+      branding,
+      orgId: data?.orgId || branding?.orgId,
+      orgCode: data?.orgCode || branding?.orgCode,
+      request: data,
+      requester: data?.requester,
+    })
+    if (!branding?.orgName) {
       try {
         const settings = await settingsService.get()
-        emailBranding = settings?.branding || {}
+        if (settings?.branding?.orgName && !data?.orgId && !data?.orgCode) {
+          emailBranding = { ...emailBranding, ...settings.branding }
+        }
       } catch (error) {
         console.warn("Could not load branding settings:", error)
-        emailBranding = {}
       }
     }
 
@@ -177,7 +185,13 @@ export async function GET(request) {
       roles: ["STAFF", "ASSET_ADMIN"],
       department: "Information Technology",
       temporaryPassword: "TempPass123!"
-    }
+    },
+    PASSWORD_RESET: {
+      userName: "John Doe",
+      userEmail: "john.doe@company.com",
+      resetUrl: "http://localhost:3000/reset-password?userId=USR123&secret=abc",
+      expiresInMinutes: 60,
+    },
   }
 
   const data = mockData[type]
@@ -189,11 +203,7 @@ export async function GET(request) {
   }
 
   try {
-    const mockBranding = {
-      orgName: "RETC Asset Management",
-      brandColor: "#2563eb",
-      accentColor: "#16a34a"
-    }
+    const mockBranding = resolveEmailBranding({ orgCode: "RETC" })
 
     const renderedEmail = renderEmailTemplate(type, data, mockBranding)
     

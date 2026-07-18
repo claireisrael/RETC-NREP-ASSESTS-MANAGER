@@ -53,6 +53,7 @@ import {
   getConsumableCategory,
 } from "../../../../../lib/utils/mappings.js";
 import { useOrgTheme } from "../../../../../components/providers/org-theme-provider";
+import { AccessoriesEditor } from "../../../../../components/assets/accessories-editor";
 
 export default function EditConsumable() {
   const params = useParams();
@@ -131,7 +132,7 @@ export default function EditConsumable() {
   const checkPermissionsAndLoadConsumable = async (id) => {
     try {
       const currentStaff = await getCurrentStaff();
-      if (!currentStaff || !permissions.canManageAssets(currentStaff)) {
+      if (!currentStaff || !permissions.canManageConsumables(currentStaff)) {
         window.location.href = "/unauthorized";
         return;
       }
@@ -162,6 +163,9 @@ export default function EditConsumable() {
         status: getStatus(consumableData),
         unit: getConsumableUnit(consumableData),
         consumableCategory: getConsumableCategory(consumableData),
+        accessories: Array.isArray(consumableData.accessories)
+          ? consumableData.accessories
+          : [],
         // Parse publicImages if it's a string
         publicImages: typeof consumableData.publicImages === 'string'
           ? JSON.parse(consumableData.publicImages || '[]')
@@ -260,6 +264,20 @@ export default function EditConsumable() {
 
       if (consumable.publicSummary !== originalConsumable.publicSummary) {
         changedFields.publicSummary = consumable.publicSummary || "";
+      }
+
+      // Accessories (array) - compare cleaned values
+      const cleanedAccessories = Array.isArray(consumable.accessories)
+        ? consumable.accessories.map((a) => a.trim()).filter(Boolean)
+        : [];
+      const originalAccessories = Array.isArray(originalConsumable.accessories)
+        ? originalConsumable.accessories
+        : [];
+      if (
+        JSON.stringify(cleanedAccessories) !==
+        JSON.stringify(originalAccessories)
+      ) {
+        changedFields.accessories = cleanedAccessories;
       }
 
       // If no changes, show message and return
@@ -840,6 +858,29 @@ export default function EditConsumable() {
                 </Label>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Accessories */}
+        <div className={`rounded-2xl shadow-xl overflow-hidden ${mutedSurface}`}>
+          <div className={`bg-gradient-to-r ${secondaryGradient} p-6`}>
+            <h3 className="text-xl font-bold text-white flex items-center">
+              <Package className="w-5 h-5 mr-3" />
+              Accessories
+            </h3>
+            <p className="text-white/80 text-sm mt-1">
+              Items that go with this consumable
+            </p>
+          </div>
+          <div className="p-6">
+            <AccessoriesEditor
+              value={consumable.accessories}
+              onChange={(next) =>
+                setConsumable((prev) => ({ ...prev, accessories: next }))
+              }
+              disabled={saving}
+              itemLabel="consumable"
+            />
           </div>
         </div>
 
