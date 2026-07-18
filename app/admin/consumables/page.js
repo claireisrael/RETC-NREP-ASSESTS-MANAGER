@@ -825,12 +825,12 @@ export default function AdminConsumablesPage() {
 
   return (
     <div
-      className="min-h-screen"
+      className="admin-consumables-page min-h-screen"
       style={{ background: "var(--org-background)" }}
     >
       <div className="container mx-auto p-6 space-y-8 max-w-7xl">
         {/* Header */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white px-7 py-8 sm:px-8 sm:py-9">
+        <div className="consumable-surface rounded-2xl border border-slate-200/80 bg-white px-7 py-8 sm:px-8 sm:py-9">
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-6">
             <div className="max-w-xl space-y-3">
               <h1
@@ -1311,7 +1311,7 @@ export default function AdminConsumablesPage() {
             {/* Total Consumables */}
             <button
               type="button"
-              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
+              className="consumable-surface text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
               style={{
                 borderLeft: "4px solid var(--org-primary)",
                 boxShadow: "none",
@@ -1364,7 +1364,7 @@ export default function AdminConsumablesPage() {
             {/* In Stock */}
             <button
               type="button"
-              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
+              className="consumable-surface text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
               style={{
                 borderLeft: "4px solid var(--org-primary-dark)",
                 boxShadow: "none",
@@ -1415,7 +1415,7 @@ export default function AdminConsumablesPage() {
             {/* Low Stock */}
             <button
               type="button"
-              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-highlight)]/30"
+              className="consumable-surface text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-highlight)]/30"
               style={{
                 borderLeft: "4px solid var(--org-highlight)",
                 boxShadow: "none",
@@ -1466,7 +1466,7 @@ export default function AdminConsumablesPage() {
             {/* Out of Stock */}
             <button
               type="button"
-              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-red-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/25"
+              className="consumable-surface text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-red-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/25"
               style={{
                 borderLeft: "4px solid #dc2626",
                 boxShadow: "none",
@@ -1508,7 +1508,7 @@ export default function AdminConsumablesPage() {
 
             {/* Categories */}
             <div
-              className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col"
+              className="consumable-surface rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col"
               style={{
                 borderLeft: "4px solid var(--org-primary)",
                 boxShadow: "none",
@@ -1547,7 +1547,7 @@ export default function AdminConsumablesPage() {
           </div>
 
           {/* Filters */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 relative z-20 shadow-none">
+          <div className="consumable-surface rounded-2xl border border-slate-200/80 bg-white p-6 relative z-20">
             <div className="flex items-center gap-3 mb-5 flex-wrap">
               <div
                 className="p-2 rounded-xl"
@@ -1732,7 +1732,7 @@ export default function AdminConsumablesPage() {
           </div>
 
           {/* Consumables Table */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden relative z-10 shadow-none">
+          <div className="consumable-surface rounded-2xl border border-slate-200/80 bg-white overflow-hidden relative z-10">
             <div className="p-6 border-b border-slate-200/80">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
@@ -1988,7 +1988,7 @@ export default function AdminConsumablesPage() {
                       return (
                         <div
                           key={`${consumable.$id}-card`}
-                          className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white !shadow-none hover:border-[var(--org-primary)]/35 transition-all duration-200"
+                          className="consumable-surface group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white hover:border-[var(--org-primary)]/35 transition-all duration-200"
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-[var(--org-primary)]/12 via-[var(--org-highlight)]/8 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                           <div className="relative z-10 p-6 space-y-5">

@@ -1249,3 +1249,11 @@ html[data-org="NREP"] .org-button--outline {
 .admin-assets-page .container > .grid > * {
   box-shadow: none !important;
 }
+
+/* /admin/consumables ? flatten all panel/metric shadows */
+.admin-consumables-page .container > .rounded-2xl,
+.admin-consumables-page .container > .grid > *,
+.admin-consumables-page .consumable-surface {
+  box-shadow: none !important;
+  filter: none !important;
+}
