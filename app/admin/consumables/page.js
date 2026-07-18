@@ -241,7 +241,7 @@ export default function AdminConsumablesPage() {
     : "bg-primary-500/20 text-primary-600 border-primary-500/30";
   // Action icon buttons use Button variants (view=default/sidebar, edit=highlight/orange, delete=destructive/red)
   const actionIconClass =
-    "h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg shadow-sm";
+    "h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg";
   const actionIconClassLg = actionIconClass;
   const locationIconClass = "text-red-600";
   const locationTextClass = isNrepOrg
@@ -824,20 +824,27 @@ export default function AdminConsumablesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+    <div
+      className="admin-consumables-page min-h-screen"
+      style={{ background: "var(--org-background)" }}
+    >
       <div className="container mx-auto p-6 space-y-8 max-w-7xl">
-        {/* Modern Header */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
-          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
-            <div className="space-y-1">
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sidebar-900 to-sidebar-900 bg-clip-text text-transparent">
-                  Consumable Management
-                </h1>
-                <p className="text-slate-600 font-medium">
-                  Manage consumable inventory and stock levels
-                </p>
-              </div>
+        {/* Header */}
+        <div className="consumable-surface rounded-2xl border border-slate-200/80 bg-white px-7 py-8 sm:px-8 sm:py-9">
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-6">
+            <div className="max-w-xl space-y-3">
+              <h1
+                className="text-3xl sm:text-[2rem] font-bold tracking-tight leading-tight"
+                style={{
+                  color:
+                    "color-mix(in srgb, var(--org-primary-dark) 72%, #0f172a 28%)",
+                }}
+              >
+                Consumable Management
+              </h1>
+              <p className="text-[15px] text-slate-500 leading-relaxed">
+                Manage consumable inventory and stock levels
+              </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -847,20 +854,12 @@ export default function AdminConsumablesPage() {
                 disabled={exporting}
                 variant="outline"
                 title="Download all consumables from the database as PDF file"
-                className="relative bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="border-[var(--org-primary)] text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
               >
-                <div className="flex items-center justify-center relative z-10">
-                  <Download
-                    className={`w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300 ${
-                      exporting ? "animate-spin" : ""
-                    }`}
-                  />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    {exporting ? "Generating PDF..." : "Download PDF"}
-                  </span>
-                </div>
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-gray-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                <Download
+                  className={`w-4 h-4 mr-2 ${exporting ? "animate-spin" : ""}`}
+                />
+                {exporting ? "Generating PDF..." : "Download PDF"}
               </Button>
 
               {/* Download Filtered Results Button - Only show if filters are applied */}
@@ -872,39 +871,21 @@ export default function AdminConsumablesPage() {
                   disabled={exporting}
                   variant="outline"
                   title="Download only the currently filtered/displayed consumables as PDF file"
-                  className="relative bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:bg-blue-100 hover:border-blue-300 text-blue-700 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="border-[var(--org-primary)]/40 text-[var(--org-primary-dark)] hover:bg-[var(--org-primary)]/10"
                 >
-                  <div className="flex items-center justify-center relative z-10">
-                    <Download
-                      className={`w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300 ${
-                        exporting ? "animate-spin" : ""
-                      }`}
-                    />
-                    <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                      {exporting ? "Generating PDF..." : "Download PDF (Filtered)"}
-                    </span>
-                  </div>
-                  {/* Ripple effect */}
-                  <div className="absolute inset-0 bg-blue-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                  <Download
+                    className={`w-4 h-4 mr-2 ${exporting ? "animate-spin" : ""}`}
+                  />
+                  {exporting ? "Generating PDF..." : "Download PDF (Filtered)"}
                 </Button>
               )}
 
               <Button
                 onClick={() => router.push("/admin/consumables/new")}
-                className="relative bg-org-gradient text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
+                className="bg-org-gradient text-white border-0"
               >
-                <div className="flex items-center justify-center relative z-10">
-                  <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 group-hover:scale-110 transition-all duration-300" />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Add Consumable
-                  </span>
-                </div>
-                {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-                {/* Shimmer effect */}
-                <div className="absolute inset-0 -top-1 -left-1 w-0 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:w-full transition-all duration-500 ease-out" />
+                <Plus className="w-4 h-4 mr-2" />
+                Add Consumable
               </Button>
 
               {/* Removed Dialog - Now using dedicated page at /admin/consumables/new */}
@@ -1325,164 +1306,263 @@ export default function AdminConsumablesPage() {
             </div>
           </div>
 
-          {/* Modern Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-            {/* Total Consumables Card */}
-            <Card className="bg-gradient-to-br from-sidebar-50 to-sidebar-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <Package className="h-6 w-6 text-white" />
-                  </div>
-                  <Badge className="bg-sidebar-500/20 text-sidebar-600 border-sidebar-500/30">
-                    Total
-                  </Badge>
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 pt-1">
+            {/* Total Consumables */}
+            <button
+              type="button"
+              className="consumable-surface text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
+              style={{
+                borderLeft: "4px solid var(--org-primary)",
+                boxShadow: "none",
+              }}
+              onClick={() => {
+                setFilterStatus("all");
+                setIgnoreScopeFilter(false);
+                router.replace("/admin/consumables");
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Total Consumables
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary) 12%, white)",
+                    color: "var(--org-primary)",
+                  }}
+                >
+                  <Package className="h-5 w-5" />
                 </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {consumables.length}
-                  </div>
-                  <p className="text-sm font-medium text-slate-600">
-                    Total Consumables
-                  </p>
-                  <p className="text-xs text-sidebar-600">
-                    {
-                      consumables.filter(
-                        (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
-                      ).length
-                    }{" "}
-                    in stock •{" "}
-                    {
-                      consumables.filter(
-                        (c) =>
-                          getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
-                      ).length
-                    }{" "}
-                    low stock
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-primary-dark)" }}
+                >
+                  {consumables.length}
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  {
+                    consumables.filter(
+                      (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
+                    ).length
+                  }{" "}
+                  in stock ·{" "}
+                  {
+                    consumables.filter(
+                      (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+                    ).length
+                  }{" "}
+                  low stock
+                </p>
+              </div>
+            </button>
 
-            {/* In Stock Card */}
-            <Card className="bg-gradient-to-br from-primary-50 to-primary-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <CheckCircle className="h-6 w-6 text-white" />
-                  </div>
-                  <Badge className="bg-primary-500/20 text-primary-600 border-primary-500/30">
-                    Ready
-                  </Badge>
+            {/* In Stock */}
+            <button
+              type="button"
+              className="consumable-surface text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
+              style={{
+                borderLeft: "4px solid var(--org-primary-dark)",
+                boxShadow: "none",
+              }}
+              onClick={() => {
+                setFilterStatus(ENUMS.CONSUMABLE_STATUS.IN_STOCK);
+                setIgnoreScopeFilter(true);
+                setProjectFilter("all");
+                router.replace(
+                  `/admin/consumables?status=${encodeURIComponent(
+                    ENUMS.CONSUMABLE_STATUS.IN_STOCK
+                  )}`
+                );
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  In Stock
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary-dark) 12%, white)",
+                    color: "var(--org-primary-dark)",
+                  }}
+                >
+                  <CheckCircle className="h-5 w-5" />
                 </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {
-                      consumables.filter(
-                        (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
-                      ).length
-                    }
-                  </div>
-                  <p className="text-sm font-medium text-slate-600">In Stock</p>
-                  <p className="text-xs text-primary-600">Available for use</p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-primary-dark)" }}
+                >
+                  {
+                    consumables.filter(
+                      (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
+                    ).length
+                  }
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  Available for use
+                </p>
+              </div>
+            </button>
 
-            {/* Low Stock Card */}
-            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <AlertTriangle className="h-6 w-6 text-white" />
-                  </div>
-                  <Badge className="bg-orange-500/20 text-orange-600 border-orange-500/30">
-                    Alert
-                  </Badge>
+            {/* Low Stock */}
+            <button
+              type="button"
+              className="consumable-surface text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-highlight)]/30"
+              style={{
+                borderLeft: "4px solid var(--org-highlight)",
+                boxShadow: "none",
+              }}
+              onClick={() => {
+                setFilterStatus(ENUMS.CONSUMABLE_STATUS.LOW_STOCK);
+                setIgnoreScopeFilter(true);
+                setProjectFilter("all");
+                router.replace(
+                  `/admin/consumables?status=${encodeURIComponent(
+                    ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+                  )}`
+                );
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Low Stock
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-highlight) 16%, white)",
+                    color: "var(--org-highlight-dark)",
+                  }}
+                >
+                  <AlertTriangle className="h-5 w-5" />
                 </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {
-                      consumables.filter(
-                        (c) =>
-                          getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
-                      ).length
-                    }
-                  </div>
-                  <p className="text-sm font-medium text-slate-600">
-                    Low Stock
-                  </p>
-                  <p className="text-xs text-orange-600">Needs restocking</p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-highlight-dark)" }}
+                >
+                  {
+                    consumables.filter(
+                      (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+                    ).length
+                  }
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  Needs restocking
+                </p>
+              </div>
+            </button>
 
-            {/* Out of Stock Card */}
-            <Card className="bg-gradient-to-br from-red-50 to-red-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <AlertTriangle className="h-6 w-6 text-white" />
-                  </div>
-                  <Badge className="bg-red-500/20 text-red-600 border-red-500/30">
-                    Alert
-                  </Badge>
+            {/* Out of Stock */}
+            <button
+              type="button"
+              className="consumable-surface text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-red-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/25"
+              style={{
+                borderLeft: "4px solid #dc2626",
+                boxShadow: "none",
+              }}
+              onClick={() => {
+                setFilterStatus(ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK);
+                setIgnoreScopeFilter(true);
+                setProjectFilter("all");
+                router.replace(
+                  `/admin/consumables?status=${encodeURIComponent(
+                    ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
+                  )}`
+                );
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Out of Stock
+                </p>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                  <AlertTriangle className="h-5 w-5" />
                 </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {
-                      consumables.filter(
-                        (c) =>
-                          getStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
-                      ).length
-                    }
-                  </div>
-                  <p className="text-sm font-medium text-slate-600">
-                    Out of Stock
-                  </p>
-                  <p className="text-xs text-red-600">
-                    Needs immediate attention
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none text-red-600">
+                  {
+                    consumables.filter(
+                      (c) =>
+                        getStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
+                    ).length
+                  }
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  Needs immediate{" "}
+                  <span className="font-semibold text-red-600">attention</span>
+                </p>
+              </div>
+            </button>
 
-            {/* Categories Card */}
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <ShoppingCart className="h-6 w-6 text-white" />
-                  </div>
-                  <Badge className="bg-purple-500/20 text-purple-600 border-purple-500/30">
-                    Types
-                  </Badge>
+            {/* Categories */}
+            <div
+              className="consumable-surface rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col"
+              style={{
+                borderLeft: "4px solid var(--org-primary)",
+                boxShadow: "none",
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Categories
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary) 12%, white)",
+                    color: "var(--org-primary)",
+                  }}
+                >
+                  <ShoppingCart className="h-5 w-5" />
                 </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {
-                      new Set(consumables.map((c) => getConsumableCategory(c)))
-                        .size
-                    }
-                  </div>
-                  <p className="text-sm font-medium text-slate-600">
-                    Categories
-                  </p>
-                  <p className="text-xs text-purple-600">Different types</p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-primary-dark)" }}
+                >
+                  {
+                    new Set(consumables.map((c) => getConsumableCategory(c)))
+                      .size
+                  }
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  Different types
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* Modern Filters */}
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-20">
-            <div className="flex items-center gap-3 mb-6">
-              <Filter className="w-5 h-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-gray-900">
+          {/* Filters */}
+          <div className="consumable-surface rounded-2xl border border-slate-200/80 bg-white p-6 relative z-20">
+            <div className="flex items-center gap-3 mb-5 flex-wrap">
+              <div
+                className="p-2 rounded-xl"
+                style={{
+                  background:
+                    "linear-gradient(135deg, var(--org-primary), var(--org-primary-dark))",
+                }}
+              >
+                <Filter className="w-5 h-5 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900">
                 Search & Filter
               </h3>
               {isNrepOrg && (
-                <div className="ml-auto flex items-center gap-2 bg-white/80 border border-gray-200/70 rounded-full px-1.5 py-1 shadow-sm">
+                <div className="ml-auto flex items-center gap-2 border border-slate-200 rounded-full px-1.5 py-1">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1492,8 +1572,8 @@ export default function AdminConsumablesPage() {
                     className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all ${
                       !ignoreScopeFilter &&
                       scopeFilter === ENUMS.CONSUMABLE_SCOPE.PROJECT
-                        ? "bg-org-gradient text-white shadow-md hover:bg-org-gradient"
-                        : "text-slate-600 hover:text-[var(--org-primary)]"
+                        ? "bg-[var(--org-primary)] text-white hover:bg-[var(--org-primary-dark)] hover:text-white"
+                        : "text-slate-600 hover:text-[var(--org-primary)] hover:bg-slate-50"
                     }`}
                   >
                     Projects
@@ -1507,8 +1587,8 @@ export default function AdminConsumablesPage() {
                     className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all ${
                       !ignoreScopeFilter &&
                       scopeFilter === ENUMS.CONSUMABLE_SCOPE.ADMIN
-                        ? "bg-org-gradient text-white shadow-md hover:bg-org-gradient"
-                        : "text-slate-600 hover:text-[var(--org-primary)]"
+                        ? "bg-[var(--org-primary)] text-white hover:bg-[var(--org-primary-dark)] hover:text-white"
+                        : "text-slate-600 hover:text-[var(--org-primary)] hover:bg-slate-50"
                     }`}
                   >
                     Administrative
@@ -1522,8 +1602,8 @@ export default function AdminConsumablesPage() {
               <div
                 className={`mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border px-4 py-3 ${
                   filterStatus === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
-                    ? "bg-red-50 border-red-200 text-red-900"
-                    : "bg-yellow-50 border-yellow-200 text-yellow-900"
+                    ? "bg-[var(--org-highlight)]/10 border-[var(--org-highlight-dark)]/35 text-slate-800"
+                    : "bg-[var(--org-highlight)]/10 border-[var(--org-highlight)]/35 text-slate-800"
                 }`}
               >
                 <p className="text-sm font-medium">
@@ -1651,16 +1731,22 @@ export default function AdminConsumablesPage() {
             </div>
           </div>
 
-          {/* Modern Consumables Table */}
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl overflow-hidden relative z-10">
-            <div className="p-6 border-b border-gray-200/60">
+          {/* Consumables Table */}
+          <div className="consumable-surface rounded-2xl border border-slate-200/80 bg-white overflow-hidden relative z-10">
+            <div className="p-6 border-b border-slate-200/80">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-xl shadow-lg">
+                  <div
+                    className="p-2 rounded-xl"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, var(--org-primary), var(--org-primary-dark))",
+                    }}
+                  >
                     <FileText className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-slate-900">
+                    <h2 className="text-lg font-semibold text-slate-900">
                       Consumables
                     </h2>
                     <p className="text-sm text-slate-600">
@@ -1675,14 +1761,14 @@ export default function AdminConsumablesPage() {
                       ? "Consumable"
                       : "Consumables"}
                   </Badge>
-                  <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-1.5 py-1 shadow-sm">
+                  <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-full px-1.5 py-1">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleViewModeChange("table")}
                       className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all font-medium ${
                         viewMode === "table"
-                          ? "bg-[var(--org-primary)] text-white shadow-sm hover:bg-[var(--org-primary)]/90"
+                          ? "bg-[var(--org-primary)] text-white hover:bg-[var(--org-primary)]/90"
                           : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                       }`}
                     >
@@ -1695,7 +1781,7 @@ export default function AdminConsumablesPage() {
                       onClick={() => handleViewModeChange("grid")}
                       className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all font-medium ${
                         viewMode === "grid"
-                          ? "bg-[var(--org-primary)] text-white shadow-sm hover:bg-[var(--org-primary)]/90"
+                          ? "bg-[var(--org-primary)] text-white hover:bg-[var(--org-primary)]/90"
                           : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                       }`}
                     >
@@ -1790,7 +1876,7 @@ export default function AdminConsumablesPage() {
                           <Badge
                             className={`${badgeForStatus(
                               getStatus(consumable)
-                            )} shadow-sm`}
+                            )}`}
                           >
                             {getStatus(consumable).replace(/_/g, " ")}
                           </Badge>
@@ -1878,7 +1964,7 @@ export default function AdminConsumablesPage() {
                           </div>
                           <Button
                             onClick={() => router.push("/admin/consumables/new")}
-                            className="mt-4 bg-org-gradient text-white shadow-md hover:shadow-lg"
+                            className="mt-4 bg-org-gradient text-white"
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             Add First Consumable
@@ -1902,14 +1988,14 @@ export default function AdminConsumablesPage() {
                       return (
                         <div
                           key={`${consumable.$id}-card`}
-                          className="group relative overflow-hidden rounded-2xl border border-gray-200/70 bg-white/95 shadow-lg hover:shadow-xl transition-all duration-300"
+                          className="consumable-surface group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white hover:border-[var(--org-primary)]/35 transition-all duration-200"
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-[var(--org-primary)]/12 via-[var(--org-highlight)]/8 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                           <div className="relative z-10 p-6 space-y-5">
                             <div className="flex items-start justify-between gap-4">
                               <div className="flex items-center gap-3">
                                 <div
-                                  className={`p-3 rounded-xl shadow-sm ${iconBackgroundClass}`}
+                                  className={`p-3 rounded-xl ${iconBackgroundClass}`}
                                 >
                                   <ShoppingCart
                                     className={`h-5 w-5 ${
@@ -1936,7 +2022,7 @@ export default function AdminConsumablesPage() {
                             </div>
 
                             <div className="flex flex-wrap items-center gap-3">
-                              <Badge className={`${badgeForStatus(status)} shadow-sm`}>
+                              <Badge className={`${badgeForStatus(status)}`}>
                                 {status.replace(/_/g, " ")}
                               </Badge>
                               <div className="flex items-center gap-2 text-sm text-slate-600">

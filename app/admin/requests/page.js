@@ -62,7 +62,6 @@ import {
   RefreshCw,
   Eye,
   AlertTriangle,
-  Clock,
   FileText,
   CheckCircle2,
   XCircle,
@@ -777,24 +776,23 @@ export default function RequestQueue() {
         ></div>
       </div>
 
-      <div className="relative container mx-auto p-6 space-y-8 max-w-7xl">
+      <div className="relative container mx-auto p-6 space-y-6 max-w-7xl">
         {/* Enhanced Header */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-8">
-          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
-            <div className="space-y-2">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 rounded-xl shadow-lg bg-[var(--org-primary)]/15">
-                  <Clock className="w-7 h-7 text-[var(--org-primary)]" />
-                </div>
-                <div>
-                  <h1 className="text-4xl font-bold text-gray-900">
-                    Request Queue
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6">
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
+            <div>
+                  <h1
+                    className="text-3xl font-bold tracking-tight"
+                    style={{
+                      color:
+                        "color-mix(in srgb, var(--org-primary-dark) 72%, #0f172a 28%)",
+                    }}
+                  >
+                    Request Management
                   </h1>
-                  <p className="text-gray-700 font-medium text-lg">
+                  <p className="text-slate-600 mt-1">
                     Manage and process asset requests
                   </p>
-                </div>
-              </div>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -802,7 +800,7 @@ export default function RequestQueue() {
                 onClick={() => loadRequests()}
                 variant="outline"
                 disabled={loading}
-                className="bg-white/80 border border-[var(--org-primary)]/30 text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10 hover:border-[var(--org-primary)]/60 transition-all duration-300 disabled:opacity-60 rounded-xl shadow-sm hover:shadow-md"
+                className="bg-white border border-[var(--org-primary)]/30 text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10 hover:border-[var(--org-primary)]/60 transition-all duration-200 disabled:opacity-60 rounded-xl"
               >
                 <RefreshCw
                   className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
@@ -812,8 +810,8 @@ export default function RequestQueue() {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-2">
-            <div className="inline-flex items-center bg-white/80 border border-[var(--org-primary)]/20 rounded-full p-1 shadow-sm">
+          <div className="mt-5 flex flex-wrap gap-2">
+            <div className="inline-flex items-center bg-slate-50 border border-slate-200 rounded-full p-1">
               <button
                 type="button"
                 onClick={() => setActiveTab("asset")}
@@ -841,14 +839,20 @@ export default function RequestQueue() {
         </div>
 
         {/* Enhanced Filters */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-20">
+        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-none p-6 relative z-20">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
-              <div className="p-2 rounded-xl shadow-lg bg-[var(--org-primary)]/15">
-                <Filter className="w-5 h-5 text-[var(--org-primary)]" />
+              <div
+                className="p-2 rounded-xl"
+                style={{
+                  background:
+                    "linear-gradient(135deg, var(--org-primary), var(--org-primary-dark))",
+                }}
+              >
+                <Filter className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-900">
+                <h2 className="text-lg font-semibold text-slate-900">
                   Filter Requests
                 </h2>
                 <p className="text-sm text-slate-600">
@@ -883,7 +887,7 @@ export default function RequestQueue() {
                   placeholder="Search by ID, purpose, or requester..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 h-12 border-gray-300 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 rounded-lg shadow-sm"
+                  className="pl-10 h-11 border-slate-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 rounded-lg"
                 />
               </div>
             </div>
@@ -894,7 +898,7 @@ export default function RequestQueue() {
                 Status
               </Label>
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="h-12 border-gray-300 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 rounded-lg shadow-sm">
+                <SelectTrigger className="h-11 border-slate-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 rounded-lg">
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent className="z-30">
@@ -936,7 +940,7 @@ export default function RequestQueue() {
                 value={selectedPriority}
                 onValueChange={setSelectedPriority}
               >
-                <SelectTrigger className="h-12 border-gray-300 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 rounded-lg shadow-sm">
+                <SelectTrigger className="h-11 border-slate-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 rounded-lg">
                   <SelectValue placeholder="All Priority" />
                 </SelectTrigger>
                 <SelectContent className="z-30">
@@ -1017,7 +1021,7 @@ export default function RequestQueue() {
             {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 animate-pulse"
+                className="rounded-2xl border border-slate-200/80 bg-white shadow-none p-6 animate-pulse"
               >
                 <div className="space-y-4">
                   <div className="h-4 bg-gray-200 rounded w-1/4"></div>
@@ -1031,14 +1035,14 @@ export default function RequestQueue() {
 
         {/* Loading Staff State */}
         {!loading && staff.length === 0 && (
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl">
+          <div className="rounded-2xl border border-slate-200/80 bg-white shadow-none">
             <SectionLoading message="Loading staff data..." className="py-12" />
           </div>
         )}
 
         {/* Empty State */}
         {!loading && staff.length > 0 && filteredRequests.length === 0 && (
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-12">
+          <div className="rounded-2xl border border-slate-200/80 bg-white shadow-none p-12">
             <div className="text-center">
               <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -1070,7 +1074,7 @@ export default function RequestQueue() {
               return (
               <Card
                 key={request.$id}
-                className="bg-white border border-gray-200/80 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200"
+                className="bg-white border border-slate-200/80 rounded-xl !shadow-none hover:border-[var(--org-primary)]/30 transition-colors duration-200"
               >
                 <CardContent className="p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1372,55 +1376,149 @@ export default function RequestQueue() {
           if (!open) {
             setRequestToAssignL2(null);
             setSelectedL2StaffId("");
+            setError("");
           }
         }}
       >
-        <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden border-0 shadow-none">
+        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-0 shadow-none">
           <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
             <div className="px-6 pt-6 pb-4">
-              <DialogTitle className="text-lg font-semibold text-slate-900">
-                Send for final approval
-              </DialogTitle>
-              <DialogDescription className="mt-1 text-sm text-slate-500 leading-relaxed">
-                Choose one superadmin. Only they will be notified and can give
-                L2 approval for this request.
-              </DialogDescription>
+              <div className="flex items-start gap-3">
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary) 14%, white)",
+                    color: "var(--org-primary-dark)",
+                  }}
+                >
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <DialogTitle className="text-lg font-semibold text-slate-900">
+                    Send for final approval
+                  </DialogTitle>
+                  <DialogDescription className="mt-1 text-sm text-slate-500 leading-relaxed">
+                    Pick one L2 superadmin. Only they will get the email and can
+                    give the final decision.
+                  </DialogDescription>
+                </div>
+              </div>
             </div>
 
             <div className="px-6 pb-5 space-y-4">
               {requestToAssignL2 && (
-                <div className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-sm text-slate-700">
-                  Request #
-                  {requestToAssignL2.$id.slice(-8).toUpperCase()}
+                <div
+                  className="rounded-xl px-4 py-3 text-sm"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-background) 85%, white)",
+                    border:
+                      "1px solid color-mix(in srgb, var(--org-primary) 18%, transparent)",
+                  }}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
+                    Request
+                  </p>
+                  <p className="font-mono text-slate-800">
+                    #{requestToAssignL2.$id.slice(-8).toUpperCase()}
+                  </p>
+                  {(() => {
+                    const lines = aggregateResolvedItems(
+                      requestToAssignL2.resolvedItems || []
+                    );
+                    if (lines.length === 0) return null;
+                    const first = formatItemQuantityLabel(
+                      lines[0].item,
+                      lines[0].quantity
+                    );
+                    return (
+                      <p className="text-slate-600 mt-0.5 truncate">
+                        {first}
+                        {lines.length > 1
+                          ? ` +${lines.length - 1} more`
+                          : ""}
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-slate-700">
-                  Superadmin <span className="text-red-500">*</span>
+                  Select L2 approver <span className="text-red-500">*</span>
                 </Label>
                 {superadmins.length === 0 ? (
-                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
                     No superadmins found. Ask a system admin to assign the
                     SYSTEM_ADMIN role.
                   </p>
                 ) : (
-                  <Select
-                    value={selectedL2StaffId}
-                    onValueChange={setSelectedL2StaffId}
-                  >
-                    <SelectTrigger className="rounded-xl">
-                      <SelectValue placeholder="Select superadmin" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {superadmins.map((sa) => (
-                        <SelectItem key={sa.$id} value={sa.$id}>
-                          {sa.name || sa.email}
-                          {sa.email ? ` (${sa.email})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2 max-h-[240px] overflow-y-auto pr-0.5">
+                    {superadmins.map((sa) => {
+                      const selected = selectedL2StaffId === sa.$id;
+                      const initials = (sa.name || sa.email || "?")
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((part) => part[0]?.toUpperCase() || "")
+                        .join("");
+                      return (
+                        <button
+                          key={sa.$id}
+                          type="button"
+                          onClick={() => setSelectedL2StaffId(sa.$id)}
+                          className={`w-full text-left rounded-xl border px-3.5 py-3 transition-colors duration-150 ${
+                            selected
+                              ? "border-[var(--org-primary)]"
+                              : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80"
+                          }`}
+                          style={
+                            selected
+                              ? {
+                                  background:
+                                    "color-mix(in srgb, var(--org-primary) 7%, white)",
+                                }
+                              : undefined
+                          }
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                                selected
+                                  ? "bg-[var(--org-primary)] text-white"
+                                  : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {initials || <User className="w-4 h-4" />}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-slate-900 truncate">
+                                {sa.name || "Unnamed approver"}
+                              </p>
+                              {sa.email ? (
+                                <p className="text-xs text-slate-500 truncate mt-0.5">
+                                  {sa.email}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                                selected
+                                  ? "border-[var(--org-primary)] bg-[var(--org-primary)] text-white"
+                                  : "border-slate-300 bg-white"
+                              }`}
+                              aria-hidden
+                            >
+                              {selected ? (
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              ) : null}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
@@ -1441,6 +1539,7 @@ export default function RequestQueue() {
                   setError("");
                 }}
                 disabled={decisionLoading}
+                className="min-w-[96px]"
               >
                 Cancel
               </Button>
@@ -1455,7 +1554,7 @@ export default function RequestQueue() {
                   !selectedL2StaffId ||
                   superadmins.length === 0
                 }
-                className="bg-org-gradient text-white"
+                className="min-w-[160px] bg-[var(--org-primary)] hover:bg-[var(--org-primary-dark)] text-white"
               >
                 {decisionLoading ? (
                   <>
@@ -1463,7 +1562,10 @@ export default function RequestQueue() {
                     Sending…
                   </>
                 ) : (
-                  "Approve & assign"
+                  <>
+                    <UserCheck className="w-4 h-4 mr-2" />
+                    Approve &amp; assign
+                  </>
                 )}
               </Button>
             </div>
