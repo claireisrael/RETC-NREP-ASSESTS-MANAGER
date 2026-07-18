@@ -54,48 +54,96 @@ function itemFields(items) {
   };
 }
 
-async function sendTemplate(type, emails, data, branding) {
-  const list = [
-    ...new Set(
-      (Array.isArray(emails) ? emails : [emails])
-        .map((e) => String(e || "").trim().toLowerCase())
-        .filter((e) => e.includes("@"))
-    ),
-  ];
-  if (list.length === 0) {
+/** Send one branded email per recipient so we can personalize the greeting/name. */
+async function sendPersonalized(type, recipients, sharedData, branding) {
+  const people = (recipients || []).filter((r) => r?.email);
+  if (people.length === 0) {
     return { sent: false, reason: "no_recipients", emails: [] };
   }
 
-  const rendered = renderEmailTemplate(type, data, branding);
-  const result = await NodemailerService.sendNotification(
-    type,
-    list,
-    data,
-    rendered
-  );
+  const emails = [];
+  const messageIds = [];
+  let anySent = false;
+  let skipReason = null;
 
-  if (result?.skipped) {
+  for (const person of people) {
+    const email = String(person.email).trim().toLowerCase();
+    if (!email.includes("@")) continue;
+
+    const data = {
+      ...sharedData,
+      recipientName: person.name || sharedData.recipientName || null,
+    };
+
+    const rendered = renderEmailTemplate(type, data, branding);
+    const result = await NodemailerService.sendNotification(
+      type,
+      email,
+      data,
+      rendered
+    );
+
+    if (result?.skipped) {
+      skipReason = result.reason || "smtp_not_configured";
+      continue;
+    }
+
+    anySent = true;
+    emails.push(email);
+    if (result?.messageId) messageIds.push(result.messageId);
+  }
+
+  if (!anySent) {
     return {
       sent: false,
-      skipped: true,
-      reason: result.reason || "smtp_not_configured",
-      emails: list,
+      skipped: !!skipReason,
+      reason: skipReason || "send_failed",
+      emails: [],
     };
   }
 
   return {
     sent: true,
-    messageId: result?.messageId,
-    emails: list,
+    emails,
+    messageIds,
   };
+}
+
+async function resolveApproverPerson(approverInput, fallbackStaffId = null) {
+  if (approverInput?.name && approverInput?.email) {
+    return {
+      ...approverInput,
+      email: String(approverInput.email).trim().toLowerCase(),
+      name: approverInput.name,
+    };
+  }
+
+  const id = approverInput?.$id || fallbackStaffId;
+  if (!id) {
+    return approverInput?.name
+      ? { name: approverInput.name, email: approverInput.email || null }
+      : null;
+  }
+
+  try {
+    const resolved = await resolveStaffRecipient(id);
+    if (!resolved) return approverInput || null;
+    return {
+      ...resolved,
+      name:
+        resolved.name ||
+        approverInput?.name ||
+        resolved.email?.split("@")[0] ||
+        "Superadmin",
+      email: resolved.email || approverInput?.email || null,
+    };
+  } catch {
+    return approverInput || null;
+  }
 }
 
 /**
  * Server-side approval workflow emails.
- * Types:
- *  - REQUEST_CREATED  → all L1 approvers
- *  - L1_APPROVED      → assigned L2 (awaiting) + requester (L1 done)
- *  - FINAL_APPROVED   → requester + L2 approver confirmation
  */
 export async function POST(request) {
   try {
@@ -124,6 +172,7 @@ export async function POST(request) {
       requester = {
         ...requesterInput,
         email: String(requesterInput.email).trim().toLowerCase(),
+        name: requesterInput.name || null,
       };
     } else if (requestDoc.requesterStaffId || requesterInput?.$id) {
       requester = await resolveStaffRecipient(
@@ -152,10 +201,10 @@ export async function POST(request) {
     const results = {};
 
     if (type === "REQUEST_CREATED") {
-      const { emails } = await getApproverRecipientsServer("L1");
-      results.l1 = await sendTemplate(
+      const { staff } = await getApproverRecipientsServer("L1");
+      results.l1 = await sendPersonalized(
         "REQUEST_AWAITING_L1",
-        emails,
+        staff,
         baseData,
         branding
       );
@@ -171,34 +220,43 @@ export async function POST(request) {
     }
 
     if (type === "L1_APPROVED") {
-      let l2Emails = [];
       const assigneeId = assignedL2StaffId || requestDoc.assignedL2StaffId;
+      let assignedL2 = null;
       if (assigneeId) {
-        const assigned = await resolveApproverEmailByStaffId(assigneeId);
-        if (assigned?.email) l2Emails = [assigned.email];
-      }
-      if (l2Emails.length === 0) {
-        const { emails } = await getApproverRecipientsServer("L2");
-        l2Emails = emails;
+        assignedL2 = await resolveApproverEmailByStaffId(assigneeId);
       }
 
-      results.l2 = await sendTemplate(
+      let l2Recipients = assignedL2?.email ? [assignedL2] : [];
+      if (l2Recipients.length === 0) {
+        const { staff } = await getApproverRecipientsServer("L2");
+        l2Recipients = staff;
+      }
+
+      const l2Name =
+        assignedL2?.name ||
+        l2Recipients[0]?.name ||
+        null;
+
+      const l1Person = await resolveApproverPerson(approverInput);
+
+      results.l2 = await sendPersonalized(
         "REQUEST_AWAITING_L2",
-        l2Emails,
+        l2Recipients,
         {
           ...baseData,
-          l1ApproverName: approverInput?.name || null,
+          l1ApproverName: l1Person?.name || approverInput?.name || null,
+          l2ApproverName: l2Name,
         },
         branding
       );
 
       if (requester?.email) {
-        results.requester = await sendTemplate(
+        results.requester = await sendPersonalized(
           "REQUEST_L1_APPROVED",
-          requester.email,
+          [requester],
           {
             ...baseData,
-            approverName: approverInput?.name || null,
+            approverName: l1Person?.name || approverInput?.name || null,
           },
           branding
         );
@@ -207,7 +265,8 @@ export async function POST(request) {
       }
 
       console.log(
-        "L1_APPROVED L2 emails:",
+        "L1_APPROVED L2:",
+        l2Name,
         results.l2.emails,
         results.l2.sent ? "sent" : results.l2.reason
       );
@@ -219,13 +278,20 @@ export async function POST(request) {
     }
 
     if (type === "FINAL_APPROVED") {
+      const l2Person = await resolveApproverPerson(
+        approverInput,
+        requestDoc.l2ApproverStaffId || requestDoc.assignedL2StaffId
+      );
+      const l2Name = l2Person?.name || "Superadmin";
+
       if (requester?.email) {
-        results.requester = await sendTemplate(
+        results.requester = await sendPersonalized(
           "REQUEST_APPROVED",
-          requester.email,
+          [requester],
           {
             ...baseData,
-            approverName: approverInput?.name || "Superadmin",
+            approverName: l2Name,
+            l2ApproverName: l2Name,
             approvalNotes: requestDoc.decisionNotes || null,
           },
           branding
@@ -234,29 +300,30 @@ export async function POST(request) {
         results.requester = { sent: false, reason: "no_requester_email" };
       }
 
-      // Confirmation to the final approver (and other L2s so both Mukisa/Paul are informed)
-      const { emails: l2Emails } = await getApproverRecipientsServer("L2");
-      const approverEmail = approverInput?.email
-        ? String(approverInput.email).trim().toLowerCase()
-        : null;
-      const confirmRecipients = [
-        ...new Set([...(approverEmail ? [approverEmail] : []), ...l2Emails]),
-      ];
-
-      if (confirmRecipients.length > 0) {
-        results.l2 = await sendTemplate(
-          "REQUEST_L2_DECISION_CONFIRM",
-          confirmRecipients,
-          {
-            ...baseData,
-            approverName: approverInput?.name || "Superadmin",
-            decision: "approved",
-          },
-          branding
-        );
-      } else {
-        results.l2 = { sent: false, reason: "no_l2_emails" };
+      const { staff: l2Staff } = await getApproverRecipientsServer("L2");
+      const confirmRecipients = [...l2Staff];
+      if (
+        l2Person?.email &&
+        !confirmRecipients.some(
+          (s) =>
+            String(s.email || "").toLowerCase() ===
+            String(l2Person.email).toLowerCase()
+        )
+      ) {
+        confirmRecipients.push(l2Person);
       }
+
+      results.l2 = await sendPersonalized(
+        "REQUEST_L2_DECISION_CONFIRM",
+        confirmRecipients,
+        {
+          ...baseData,
+          approverName: l2Name,
+          l2ApproverName: l2Name,
+          decision: "approved",
+        },
+        branding
+      );
 
       return NextResponse.json({
         success: !!(results.requester.sent || results.l2?.sent),
@@ -276,12 +343,20 @@ export async function POST(request) {
         );
       }
 
-      results.requester = await sendTemplate(
+      const l2Person = await resolveApproverPerson(
+        approverInput,
+        requestDoc.l2ApproverStaffId || requestDoc.assignedL2StaffId
+      );
+      const l2Name = l2Person?.name || approverInput?.name || "Superadmin";
+
+      results.requester = await sendPersonalized(
         "ASSET_ISSUED",
-        requester.email,
+        [requester],
         {
           ...baseData,
-          issuerName: approverInput?.name || "Stores team",
+          issuerName: l2Name,
+          approverName: l2Name,
+          l2ApproverName: l2Name,
           issuanceNotes:
             "Your consumable request was approved and the item(s) have been issued to you.",
           isConsumable: true,
@@ -289,19 +364,18 @@ export async function POST(request) {
         branding
       );
 
-      const { emails: l2Emails } = await getApproverRecipientsServer("L2");
-      if (l2Emails.length > 0) {
-        results.l2 = await sendTemplate(
-          "REQUEST_L2_DECISION_CONFIRM",
-          l2Emails,
-          {
-            ...baseData,
-            approverName: approverInput?.name || "Superadmin",
-            decision: "approved_and_issued",
-          },
-          branding
-        );
-      }
+      const { staff: l2Staff } = await getApproverRecipientsServer("L2");
+      results.l2 = await sendPersonalized(
+        "REQUEST_L2_DECISION_CONFIRM",
+        l2Staff,
+        {
+          ...baseData,
+          approverName: l2Name,
+          l2ApproverName: l2Name,
+          decision: "approved_and_issued",
+        },
+        branding
+      );
 
       return NextResponse.json({
         success: !!results.requester.sent,
