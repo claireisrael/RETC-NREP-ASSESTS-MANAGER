@@ -52,6 +52,8 @@ import {
   X,
   Package,
   AlertTriangle,
+  CheckCircle,
+  Users,
   Settings,
   DollarSign,
   MapPin,
@@ -746,13 +748,13 @@ export default function AdminAssetManagement() {
       className="admin-assets-page min-h-screen"
       style={{ background: "var(--org-background)" }}
     >
-      <div className="container mx-auto p-6 space-y-6 max-w-7xl">
+      <div className="container mx-auto p-6 space-y-8 max-w-7xl">
         {/* Header */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-6">
-          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
-            <div>
+        <div className="rounded-2xl border border-slate-200/80 bg-white px-7 py-8 sm:px-8 sm:py-9">
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-6">
+            <div className="max-w-xl space-y-3">
               <h1
-                className="text-3xl font-bold tracking-tight"
+                className="text-3xl sm:text-[2rem] font-bold tracking-tight leading-tight"
                 style={{
                   color:
                     "color-mix(in srgb, var(--org-primary-dark) 72%, #0f172a 28%)",
@@ -760,7 +762,7 @@ export default function AdminAssetManagement() {
               >
                 Asset Management
               </h1>
-              <p className="text-slate-600 mt-1">
+              <p className="text-[15px] text-slate-500 leading-relaxed">
                 Manage system assets, inventory, and equipment
               </p>
             </div>
@@ -790,7 +792,7 @@ export default function AdminAssetManagement() {
                   disabled={exporting}
                   title="Download only the currently filtered/displayed assets as a PDF file"
                   variant="outline"
-                  className="border-[var(--org-primary)] text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
+                  className="border-[var(--org-primary)]/40 text-[var(--org-primary-dark)] hover:bg-[var(--org-primary)]/10"
                 >
                   <Download
                     className={`w-4 h-4 mr-2 ${exporting ? "animate-spin" : ""}`}
@@ -1361,119 +1363,165 @@ export default function AdminAssetManagement() {
             </div>
           </div>
 
-          {/* Key Metrics — white cards, color only on the left edge */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 pt-1">
             {/* Total Assets */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-colors hover:bg-slate-50/80"
-              style={{ borderLeft: "3px solid var(--org-primary)" }}
+            <button
+              type="button"
+              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
+              style={{
+                borderLeft: "4px solid var(--org-primary)",
+                boxShadow: "none",
+              }}
               onClick={() => setFilterStatus("all")}
             >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <p className="text-sm font-medium text-slate-600">
-                    Total Assets
-                  </p>
-                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
-                    Total
-                  </Badge>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Total Assets
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary) 12%, white)",
+                    color: "var(--org-primary)",
+                  }}
+                >
+                  <Package className="h-5 w-5" />
                 </div>
-                <div className="text-3xl font-bold text-slate-900">
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-primary-dark)" }}
+                >
                   {assets.length}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
                   {
                     assets.filter(
                       (a) =>
                         a.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
                     ).length
                   }{" "}
-                  available •{" "}
+                  available ·{" "}
                   {
                     assets.filter(
-                      (a) =>
-                        a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
+                      (a) => a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
                     ).length
                   }{" "}
                   in use
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </button>
 
             {/* Available */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-colors hover:bg-slate-50/80"
-              style={{ borderLeft: "3px solid #059669" }}
-              onClick={() =>
-                setFilterStatus(ENUMS.AVAILABLE_STATUS.AVAILABLE)
-              }
+            <button
+              type="button"
+              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-primary)]/25"
+              style={{
+                borderLeft: "4px solid var(--org-primary-dark)",
+                boxShadow: "none",
+              }}
+              onClick={() => setFilterStatus(ENUMS.AVAILABLE_STATUS.AVAILABLE)}
             >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <p className="text-sm font-medium text-slate-600">Available</p>
-                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
-                    Ready
-                  </Badge>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Available
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary-dark) 12%, white)",
+                    color: "var(--org-primary-dark)",
+                  }}
+                >
+                  <CheckCircle className="h-5 w-5" />
                 </div>
-                <div className="text-3xl font-bold text-slate-900">
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-primary-dark)" }}
+                >
                   {
                     assets.filter(
                       (a) =>
                         a.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
                     ).length
                   }
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
                   Ready for deployment
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </button>
 
             {/* In Use */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-colors hover:bg-slate-50/80"
-              style={{ borderLeft: "3px solid var(--org-highlight)" }}
+            <button
+              type="button"
+              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--org-highlight)]/30"
+              style={{
+                borderLeft: "4px solid var(--org-highlight)",
+                boxShadow: "none",
+              }}
               onClick={() => setFilterStatus(ENUMS.AVAILABLE_STATUS.IN_USE)}
             >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <p className="text-sm font-medium text-slate-600">In Use</p>
-                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
-                    Active
-                  </Badge>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  In Use
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-highlight) 16%, white)",
+                    color: "var(--org-highlight-dark)",
+                  }}
+                >
+                  <UserCheck className="h-5 w-5" />
                 </div>
-                <div className="text-3xl font-bold text-slate-900">
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-highlight-dark)" }}
+                >
                   {
                     assets.filter(
-                      (a) =>
-                        a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
+                      (a) => a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
                     ).length
                   }
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
                   Currently assigned
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </button>
 
             {/* Maintenance */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-colors hover:bg-slate-50/80"
-              style={{ borderLeft: "3px solid #e11d48" }}
+            <button
+              type="button"
+              className="text-left rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col transition-colors duration-200 hover:bg-red-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/25"
+              style={{
+                borderLeft: "4px solid #dc2626",
+                boxShadow: "none",
+              }}
               onClick={() =>
                 setFilterStatus(ENUMS.AVAILABLE_STATUS.MAINTENANCE)
               }
             >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <p className="text-sm font-medium text-slate-600">
-                    Maintenance
-                  </p>
-                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
-                    Alert
-                  </Badge>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Maintenance
+                </p>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                  <AlertTriangle className="h-5 w-5" />
                 </div>
-                <div className="text-3xl font-bold text-slate-900">
+              </div>
+              <div className="mt-auto pt-8">
+                <p className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none text-red-600">
                   {
                     assets.filter(
                       (a) =>
@@ -1483,31 +1531,49 @@ export default function AdminAssetManagement() {
                           ENUMS.AVAILABLE_STATUS.REPAIR_REQUIRED
                     ).length
                   }
-                </div>
-                <p className="text-xs text-slate-500 mt-1">Needs attention</p>
-              </CardContent>
-            </Card>
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  Needs{" "}
+                  <span className="font-semibold text-red-600">attention</span>
+                </p>
+              </div>
+            </button>
 
             {/* Staff */}
-            <Card
-              className="bg-white border border-slate-200/80 !shadow-none"
-              style={{ borderLeft: "3px solid #7c3aed" }}
+            <div
+              className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-7 min-h-[172px] flex flex-col"
+              style={{
+                borderLeft: "4px solid var(--org-primary)",
+                boxShadow: "none",
+              }}
             >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <p className="text-sm font-medium text-slate-600">Staff</p>
-                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
-                    Team
-                  </Badge>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700 leading-snug">
+                  Staff
+                </p>
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--org-primary) 12%, white)",
+                    color: "var(--org-primary)",
+                  }}
+                >
+                  <Users className="h-5 w-5" />
                 </div>
-                <div className="text-3xl font-bold text-slate-900">
+              </div>
+              <div className="mt-auto pt-8">
+                <p
+                  className="text-[2.35rem] font-bold tracking-tight tabular-nums leading-none"
+                  style={{ color: "var(--org-primary-dark)" }}
+                >
                   {staffMap.size || 0}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
+                </p>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
                   Linked custodians
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* Filters */}
