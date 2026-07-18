@@ -30,12 +30,13 @@ import {
 } from "../../../../lib/utils/mappings.js";
 import { ConsumableOverview } from "../../../../components/assets/consumable-overview";
 import { ConsumableActivity } from "../../../../components/assets/consumable-activity";
+import { AssetCustody } from "../../../../components/assets/asset-custody";
 import {
   ArrowLeft,
   Edit,
   Package,
   Activity,
-  Truck,
+  RotateCcw,
   AlertTriangle,
   CheckCircle,
   XCircle,
@@ -392,15 +393,15 @@ export default function ConsumableDetailPage() {
               Activity Log
             </TabsTrigger>
             <TabsTrigger
-              value="distribution"
+              value="custody"
               className={`flex items-center rounded-lg data-[state=active]:text-white ${
                 isNrepOrg
                   ? "data-[state=active]:bg-[var(--org-primary)]"
                   : "data-[state=active]:bg-orange-500"
               }`}
             >
-              <Truck className="w-4 h-4 mr-2" />
-              Distribution
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Issues & Returns
             </TabsTrigger>
           </TabsList>
 
@@ -420,25 +421,11 @@ export default function ConsumableDetailPage() {
             <ConsumableActivity consumableId={consumable.$id} />
           </TabsContent>
 
-          <TabsContent value="distribution" className="space-y-6 mt-6">
-            <Card className={surfaceClass}>
-              <CardHeader className="border-b border-gray-100">
-                <CardTitle
-                  className={`flex items-center ${
-                    isNrepOrg
-                      ? "text-[var(--org-primary)]"
-                      : "text-orange-800"
-                  }`}
-                >
-                  <Truck className="w-5 h-5 mr-2" />
-                  Distribution History
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-8 text-center text-gray-500">
-                <Package className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                <p>Distribution tracking coming soon</p>
-              </CardContent>
-            </Card>
+          <TabsContent value="custody" className="space-y-6 mt-6">
+            <AssetCustody
+              assetId={consumable.$id}
+              onReturnProcessed={loadData}
+            />
           </TabsContent>
         </Tabs>
       </div>

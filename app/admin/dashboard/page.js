@@ -512,21 +512,29 @@ export default function AdminDashboard() {
 
     // Out of stock items
     if (metrics.outOfStockConsumables > 0) {
+      const n = metrics.outOfStockConsumables;
       alerts.push({
         severity: "critical",
-        message: `${metrics.outOfStockConsumables} items are out of stock`,
+        message:
+          n === 1
+            ? "1 item is out of stock"
+            : `${n} items are out of stock`,
         action: "View Consumables",
-        link: "/admin/consumables",
+        link: `/admin/consumables?status=${ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK}`,
       });
     }
 
     // Low stock items
     if (metrics.lowStockConsumables > 0) {
+      const n = metrics.lowStockConsumables;
       alerts.push({
         severity: "warning",
-        message: `${metrics.lowStockConsumables} items are running low`,
+        message:
+          n === 1
+            ? "1 item is running low"
+            : `${n} items are running low`,
         action: "Check Stock",
-        link: "/admin/consumables",
+        link: `/admin/consumables?status=${ENUMS.CONSUMABLE_STATUS.LOW_STOCK}`,
       });
     }
 
@@ -1096,15 +1104,21 @@ export default function AdminDashboard() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-600">Low Stock</span>
-                  <span className="text-lg font-bold text-yellow-700">
+                  <Link
+                    href={`/admin/consumables?status=${ENUMS.CONSUMABLE_STATUS.LOW_STOCK}`}
+                    className="text-lg font-bold text-yellow-700 hover:underline"
+                  >
                     {dashboardData.metrics.lowStockConsumables}
-                  </span>
+                  </Link>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-600">Out of Stock</span>
-                  <span className="text-lg font-bold text-red-700">
+                  <Link
+                    href={`/admin/consumables?status=${ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK}`}
+                    className="text-lg font-bold text-red-700 hover:underline"
+                  >
                     {dashboardData.metrics.outOfStockConsumables}
-                  </span>
+                  </Link>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                   <span className="text-sm font-medium text-slate-700">Total Items</span>

@@ -49,14 +49,19 @@ import {
   Search,
   Filter,
   Eye,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
   List,
   Grid3X3,
+  ShoppingCart,
 } from "lucide-react";
 import { useOrgTheme } from "../../components/providers/org-theme-provider";
 import { PageLoading } from "../../components/ui/loading";
+import {
+  ListPagination,
+  paginateItems,
+} from "../../components/ui/list-pagination";
+
+const ADMIN_PLACEHOLDER_PROJECT_ID = "ADMIN";
+const PAGE_SIZE = 12;
 
 export default function ConsumablesPage() {
   const router = useRouter();
@@ -68,16 +73,17 @@ export default function ConsumablesPage() {
   const [error, setError] = useState("");
   const [currentStaff, setCurrentStaff] = useState(null);
   const [viewMode, setViewMode] = useState("cards");
+  const [currentPage, setCurrentPage] = useState(1);
   const { orgCode } = useOrgTheme();
   const normalizedOrgCode = (orgCode || "").toUpperCase();
   const isNrepOrg = normalizedOrgCode === "NREP";
-  const ADMIN_PLACEHOLDER_PROJECT_ID = "ADMIN";
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
+  const [scopeFilter, setScopeFilter] = useState("all"); // all | admin | projects
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -171,12 +177,12 @@ export default function ConsumablesPage() {
       return false;
     }
 
-    // Department filter
+    // Department / project filter
     if (departmentFilter) {
       if (isNrepOrg) {
         const projectId = consumable.projectId || ADMIN_PLACEHOLDER_PROJECT_ID;
         if (departmentFilter === ADMIN_PLACEHOLDER_PROJECT_ID) {
-          if (projectId && projectId !== ADMIN_PLACEHOLDER_PROJECT_ID) {
+          if (projectId !== ADMIN_PLACEHOLDER_PROJECT_ID) {
             return false;
           }
         } else if (projectId !== departmentFilter) {
@@ -187,24 +193,17 @@ export default function ConsumablesPage() {
       }
     }
 
+    // Scope: administrative vs project consumables (NREP)
+    if (isNrepOrg && scopeFilter !== "all") {
+      const isAdmin =
+        !consumable.projectId ||
+        consumable.projectId === ADMIN_PLACEHOLDER_PROJECT_ID;
+      if (scopeFilter === "admin" && !isAdmin) return false;
+      if (scopeFilter === "projects" && isAdmin) return false;
+    }
+
     return true;
   });
-
-  const getStatusIcon = (consumable) => {
-    const status = getConsumableStatus(consumable);
-    switch (status) {
-      case "IN_STOCK":
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case "LOW_STOCK":
-        return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
-      case "OUT_OF_STOCK":
-        return <XCircle className="w-4 h-4 text-red-600" />;
-      case "DISCONTINUED":
-        return <XCircle className="w-4 h-4 text-gray-600" />;
-      default:
-        return <Package className="w-4 h-4 text-gray-600" />;
-    }
-  };
 
   const getStatusBadge = (consumable) => {
     const status = getConsumableStatus(consumable);
@@ -240,10 +239,85 @@ export default function ConsumablesPage() {
       lookup.set(project.$id, project.name || project.title || project.code || "");
     });
     return (projectId) => {
-      if (!projectId) return "Administrative";
-      return lookup.get(projectId) || "Administrative";
+      if (!projectId || projectId === ADMIN_PLACEHOLDER_PROJECT_ID) {
+        return "Administrative";
+      }
+      return lookup.get(projectId) || "Unknown project";
     };
   }, [projects]);
+
+  const isAdministrativeConsumable = (consumable) =>
+    !consumable?.projectId ||
+    consumable.projectId === ADMIN_PLACEHOLDER_PROJECT_ID;
+
+  const getProjectBadge = (consumable) => {
+    if (isAdministrativeConsumable(consumable)) {
+      return {
+        kind: "admin",
+        label: "Administrative",
+        detail: null,
+      };
+    }
+    return {
+      kind: "project",
+      label: "Project",
+      detail: getProjectName(consumable.projectId),
+    };
+  };
+
+  const renderScopeBadge = (consumable) => {
+    if (!isNrepOrg) return null;
+    const badge = getProjectBadge(consumable);
+    const isAdmin = badge.kind === "admin";
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${
+          isAdmin
+            ? "bg-[var(--org-accent)]/15 text-[var(--org-accent-dark)] border border-[var(--org-accent)]/35"
+            : "bg-[var(--org-primary)]/10 text-[var(--org-primary-dark)] border border-[var(--org-primary)]/25"
+        }`}
+      >
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${
+            isAdmin ? "bg-[var(--org-accent)]" : "bg-[var(--org-primary)]"
+          }`}
+        />
+        {isAdmin ? badge.label : `${badge.label} · ${badge.detail}`}
+      </span>
+    );
+  };
+
+  const goRequestConsumable = (consumableId) => {
+    router.push(
+      `/requests/new?type=consumable&itemId=${encodeURIComponent(consumableId)}`
+    );
+  };
+
+  const scopeCounts = useMemo(() => {
+    let admin = 0;
+    let project = 0;
+    (consumables || []).forEach((item) => {
+      if (isAdministrativeConsumable(item)) admin += 1;
+      else project += 1;
+    });
+    return { admin, project, total: admin + project };
+  }, [consumables]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchQuery,
+    categoryFilter,
+    statusFilter,
+    departmentFilter,
+    scopeFilter,
+  ]);
+
+  const pagination = useMemo(
+    () => paginateItems(filteredConsumables, currentPage, PAGE_SIZE),
+    [filteredConsumables, currentPage]
+  );
+  const pagedConsumables = pagination.items;
 
   if (loading) {
     return <PageLoading message="Loading consumables..." />;
@@ -269,18 +343,59 @@ export default function ConsumablesPage() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold text-gray-900">Consumables</h1>
-          <p className="text-gray-600">Browse and request consumable items</p>
+          <p className="text-gray-600">
+            Browse and request consumable items
+            {isNrepOrg && scopeCounts.total > 0 ? (
+              <span className="text-gray-500">
+                {" "}
+                · {scopeCounts.admin} administrative · {scopeCounts.project}{" "}
+                project
+              </span>
+            ) : null}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Button
             onClick={() => router.push("/requests/new?type=consumable")}
-            className="bg-org-gradient text-white shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5"
+            variant="request"
+            className="transition-transform hover:-translate-y-0.5"
           >
-            <Package className="w-4 h-4 mr-2" />
+            <ShoppingCart className="w-4 h-4 mr-2" />
             Request Consumables
           </Button>
         </div>
       </div>
+
+      {isNrepOrg && (
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: "all", label: `All (${scopeCounts.total})` },
+            {
+              id: "admin",
+              label: `Administrative (${scopeCounts.admin})`,
+            },
+            {
+              id: "projects",
+              label: `By project (${scopeCounts.project})`,
+            },
+          ].map((chip) => (
+            <Button
+              key={chip.id}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setScopeFilter(chip.id)}
+              className={`rounded-full ${
+                scopeFilter === chip.id
+                  ? "bg-[var(--org-primary)] text-white border-[var(--org-primary)] hover:bg-[var(--org-primary)]/90 hover:text-white"
+                  : "border-gray-200 text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {chip.label}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {/* Filters */}
       <Card>
@@ -436,7 +551,7 @@ export default function ConsumablesPage() {
         </div>
       </div>
 
-      {/* Consumables List */}
+      {/* Consumables List — flat list; scope is controlled by filters only */}
       {filteredConsumables.length === 0 ? (
         <div className="text-center py-12">
           <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -444,169 +559,176 @@ export default function ConsumablesPage() {
             No consumables found
           </h3>
           <p className="text-gray-500">
-            {searchQuery || categoryFilter || statusFilter || departmentFilter
+            {searchQuery ||
+            categoryFilter ||
+            statusFilter ||
+            departmentFilter ||
+            scopeFilter !== "all"
               ? "Try adjusting your search or filter criteria."
               : "No consumables are currently available."}
           </p>
         </div>
-      ) : viewMode === "table" ? (
-        <div className="bg-white/90 backdrop-blur border border-gray-200 rounded-2xl shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
-                    Consumable
-                  </TableHead>
-                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
-                    Category
-                  </TableHead>
-                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
-                    Status
-                  </TableHead>
-                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
-                    Stock
-                  </TableHead>
-                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
-                    {isNrepOrg ? "Project" : "Department"}
-                  </TableHead>
-                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700 text-right">
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredConsumables.map((consumable) => (
-                  <TableRow key={consumable.$id} className="hover:bg-gray-50/70">
-                    <TableCell className="py-4 px-6">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-gray-900">
-                          {consumable.name}
+      ) : (
+        <div className="space-y-4">
+          {viewMode === "table" ? (
+            <div className="bg-white/90 backdrop-blur border border-gray-200 rounded-2xl shadow-md overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                        Consumable
+                      </TableHead>
+                      {isNrepOrg ? (
+                        <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                          Scope
+                        </TableHead>
+                      ) : (
+                        <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                          Department
+                        </TableHead>
+                      )}
+                      <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                        Status
+                      </TableHead>
+                      <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                        Stock
+                      </TableHead>
+                      <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700 text-right">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pagedConsumables.map((consumable) => (
+                      <TableRow
+                        key={consumable.$id}
+                        className="hover:bg-gray-50/70"
+                      >
+                        <TableCell className="py-4 px-6">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-gray-900">
+                              {consumable.name}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {formatCategory(
+                                getConsumableCategory(consumable)
+                              )}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-4 px-6">
+                          {isNrepOrg
+                            ? renderScopeBadge(consumable)
+                            : getDepartmentName(consumable.departmentId)}
+                        </TableCell>
+                        <TableCell className="py-4 px-6">
+                          {getStatusBadge(consumable)}
+                        </TableCell>
+                        <TableCell className="py-4 px-6">
+                          <span className="font-semibold text-gray-900">
+                            {getCurrentStock(consumable)}{" "}
+                            {getConsumableUnit(consumable)?.toLowerCase()}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-4 px-6 text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                router.push(`/consumables/${consumable.$id}`)
+                              }
+                              className="inline-flex items-center gap-2 border-gray-200"
+                            >
+                              <Eye className="w-4 h-4" />
+                              View
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="request"
+                              onClick={() =>
+                                goRequestConsumable(consumable.$id)
+                              }
+                              className="inline-flex items-center gap-2"
+                            >
+                              <ShoppingCart className="w-4 h-4" />
+                              Request
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {pagedConsumables.map((consumable) => (
+                <Card
+                  key={consumable.$id}
+                  className="bg-white border border-gray-200/90 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden"
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-semibold text-gray-900 text-base leading-snug line-clamp-2">
+                        {consumable.name}
+                      </h3>
+                      {getStatusBadge(consumable)}
+                    </div>
+
+                    {isNrepOrg && renderScopeBadge(consumable)}
+
+                    <p className="text-sm text-gray-600">
+                      <span className="font-semibold text-gray-900">
+                        {getCurrentStock(consumable)}
+                      </span>{" "}
+                      {getConsumableUnit(consumable)?.toLowerCase()}
+                      {getMinStock(consumable) > 0 ? (
+                        <span className="text-gray-400">
+                          {" "}
+                          · min {getMinStock(consumable)}
                         </span>
-                        <span className="text-sm text-gray-500">
-                          {consumable.assetTag || "No tag"}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4 px-6">
-                      {formatCategory(getConsumableCategory(consumable))}
-                    </TableCell>
-                    <TableCell className="py-4 px-6">
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(consumable)}
-                        {getStatusBadge(consumable)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4 px-6">
-                      <div className="font-semibold text-gray-900">
-                        {getCurrentStock(consumable)} {" "}
-                        {getConsumableUnit(consumable)?.toLowerCase()}
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4 px-6">
-                      {isNrepOrg
-                        ? getProjectName(
-                            consumable.projectId || ADMIN_PLACEHOLDER_PROJECT_ID
-                          )
-                        : getDepartmentName(consumable.departmentId)}
-                    </TableCell>
-                    <TableCell className="py-4 px-6 text-right">
+                      ) : null}
+                    </p>
+
+                    <div className="flex gap-2 pt-1">
                       <Button
+                        type="button"
+                        variant="outline"
                         onClick={() =>
                           router.push(`/consumables/${consumable.$id}`)
                         }
-                        className="inline-flex items-center gap-2 bg-org-gradient text-white shadow-sm hover:shadow-lg"
+                        className="flex-1 border-gray-200 text-gray-700"
                       >
-                        <Eye className="w-4 h-4" />
+                        <Eye className="w-4 h-4 mr-1.5" />
                         View
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredConsumables.map((consumable) => {
-            return (
-              <Card
-                key={consumable.$id}
-                className="bg-white border border-gray-200 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group"
-              >
-                <CardContent className="p-5 space-y-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="relative w-12 h-12 rounded-xl flex items-center justify-center font-semibold text-[var(--org-primary)] bg-[var(--org-primary)]/12 shadow-[0_10px_25px_-18px_rgba(14,99,112,0.7)]">
-                        {consumable.name.charAt(0).toUpperCase()}
-                        <span className="absolute inset-0 rounded-xl border border-white/50" />
-                      </div>
-                      <div className="space-y-1">
-                        <h3 className="font-semibold text-gray-900 text-lg tracking-tight">
-                          {consumable.name}
-                        </h3>
-                        <p className="text-sm font-medium text-[var(--org-primary)]/80">
-                          {formatCategory(getConsumableCategory(consumable))}
-                        </p>
-                        <p className="text-xs text-gray-500 uppercase tracking-wide">
-                          Tag: {consumable.assetTag || "No tag"}
-                        </p>
-                      </div>
+                      <Button
+                        type="button"
+                        variant="request"
+                        onClick={() => goRequestConsumable(consumable.$id)}
+                        className="flex-1"
+                      >
+                        <ShoppingCart className="w-4 h-4 mr-1.5" />
+                        Request
+                      </Button>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      {getStatusIcon(consumable)}
-                      {getStatusBadge(consumable)}
-                    </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
 
-                  {isNrepOrg && (
-                    <div className="inline-flex items-center gap-2 rounded-full bg-[var(--org-primary)]/8 border border-[var(--org-primary)]/20 px-3 py-1 text-xs font-medium text-[var(--org-primary)]">
-                      <span className="h-2 w-2 rounded-full bg-[var(--org-primary)]"></span>
-                      {getProjectName(
-                        consumable.projectId || ADMIN_PLACEHOLDER_PROJECT_ID
-                      )}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="space-y-1">
-                      <span className="text-gray-500">Current Stock</span>
-                      <span className="block text-lg font-semibold text-gray-900">
-                        {getCurrentStock(consumable)}{" "}
-                        {getConsumableUnit(consumable)?.toLowerCase()}
-                      </span>
-                    </div>
-                    {getMinStock(consumable) > 0 && (
-                      <div className="space-y-1">
-                        <span className="text-gray-500">Min Stock</span>
-                        <span className="block text-lg font-semibold text-gray-900">
-                          {getMinStock(consumable)}{" "}
-                          {getConsumableUnit(consumable)?.toLowerCase()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <p>
-                      Location: {consumable.locationName || "Not specified"}
-                    </p>
-                  </div>
-
-                  <Button
-                    onClick={() =>
-                      router.push(`/consumables/${consumable.$id}`)
-                    }
-                    className="w-full bg-org-gradient text-white shadow-md hover:shadow-lg transition-all duration-300"
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Details
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
+          <ListPagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.totalItems}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
+            itemLabel="consumables"
+          />
         </div>
       )}
     </div>

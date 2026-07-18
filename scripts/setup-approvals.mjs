@@ -61,7 +61,12 @@ async function setupSchema() {
   console.log("\n[1/2] Ensuring ASSET_REQUESTS approval attributes...");
   const existing = await existingAttributeKeys();
 
-  const stringAttrs = ["approvalStage", "l1ApproverStaffId", "l2ApproverStaffId"];
+  const stringAttrs = [
+    "approvalStage",
+    "l1ApproverStaffId",
+    "l2ApproverStaffId",
+    "assignedL2StaffId",
+  ];
   const datetimeAttrs = ["l1DecisionAt", "l2DecisionAt"];
 
   for (const key of stringAttrs) {

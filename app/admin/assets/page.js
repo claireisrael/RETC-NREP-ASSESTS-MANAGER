@@ -56,9 +56,7 @@ import {
   DollarSign,
   MapPin,
   FileText,
-  Users,
   UserCheck,
-  CheckCircle,
   Clock,
   Image,
   List,
@@ -89,8 +87,14 @@ import {
 import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 import { PageLoading } from "../../../components/ui/loading";
 import { buildAssetTag } from "../../../lib/utils/asset-tag.js";
+import {
+  ListPagination,
+  paginateItems,
+} from "../../../components/ui/list-pagination";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+
+const PAGE_SIZE = 15;
 
 export default function AdminAssetManagement() {
   const router = useRouter();
@@ -112,6 +116,7 @@ export default function AdminAssetManagement() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState(null);
   const [viewMode, setViewMode] = useState("table");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Export functionality state
   const [exporting, setExporting] = useState(false);
@@ -662,6 +667,22 @@ export default function AdminAssetManagement() {
     );
   });
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchTerm,
+    filterCategory,
+    filterSubcategory,
+    filterStatus,
+    filterCondition,
+    projectFilter,
+  ]);
+
+  const pagination = useMemo(
+    () => paginateItems(filteredAssets, currentPage, PAGE_SIZE),
+    [filteredAssets, currentPage]
+  );
+  const pagedAssets = pagination.items;
   const clearFilters = () => {
     setSearchTerm("");
     setFilterCategory("all");
@@ -691,46 +712,17 @@ export default function AdminAssetManagement() {
     return <PageLoading message="Loading assets..." />;
   }
 
-  const metricCardClass = isNrepOrg
-    ? "bg-gradient-to-br from-[var(--org-primary)]/12 via-[var(--org-highlight)]/10 to-white"
-    : "bg-gradient-to-br from-sidebar-50 to-sidebar-100";
-  const metricIconClass = isNrepOrg
-    ? "bg-gradient-to-br from-[var(--org-primary)] to-[var(--org-primary-dark)]"
-    : "bg-gradient-to-br from-sidebar-500 to-sidebar-600";
-  const metricSubtextClass = isNrepOrg
-    ? "text-[var(--org-primary)]/80"
-    : "text-sidebar-600";
-  const primaryCardClass = isNrepOrg
-    ? "bg-gradient-to-br from-[var(--org-primary)]/12 via-[var(--org-primary)]/10 to-white"
-    : "bg-gradient-to-br from-primary-50 to-primary-100";
-  const primaryIconClass = isNrepOrg
-    ? "bg-gradient-to-br from-[var(--org-primary)] to-[var(--org-primary-dark)]"
-    : "bg-gradient-to-br from-primary-500 to-primary-600";
-  const primaryBadgeClass = isNrepOrg
-    ? "bg-[var(--org-primary)]/20 text-[var(--org-primary)] border-[var(--org-primary)]/25"
-    : "bg-primary-500/20 text-primary-600 border-primary-500/30";
-  const highlightCardClass = isNrepOrg
-    ? "bg-gradient-to-br from-[var(--org-highlight)]/14 via-[var(--org-primary)]/10 to-white"
-    : "bg-gradient-to-br from-orange-50 to-orange-100";
-  const highlightIconClass = isNrepOrg
-    ? "bg-gradient-to-br from-[var(--org-highlight)] to-[var(--org-primary)]"
-    : "bg-gradient-to-br from-orange-500 to-orange-600";
-  const highlightBadgeClass = isNrepOrg
-    ? "bg-[var(--org-highlight)]/20 text-[var(--org-highlight)] border-[var(--org-highlight)]/25"
-    : "bg-orange-500/20 text-orange-600 border-orange-500/30";
-
   const categoryBadgeClass = isNrepOrg
     ? "bg-slate-100 text-slate-700 border-slate-200"
     : "bg-sidebar-50 text-sidebar-700 border-sidebar-200";
   const headerBadgeClass = isNrepOrg
     ? "bg-[var(--org-primary)]/18 text-[var(--org-primary)] border-[var(--org-primary)]/25"
     : "bg-sidebar-500/20 text-sidebar-600 border-sidebar-500/30";
-  const actionButtonClass = isNrepOrg
-    ? "bg-[var(--org-primary)]/12 text-[var(--org-primary)] border border-[var(--org-primary)]/30 hover:bg-[var(--org-primary)]/18 hover:text-white hover:shadow-lg"
-    : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 hover:text-gray-900";
-  const actionEditButtonClass = isNrepOrg
-    ? "bg-[var(--org-highlight)]/14 text-[var(--org-highlight)] border border-[var(--org-highlight)]/30 hover:bg-[var(--org-highlight)]/20 hover:text-white hover:shadow-lg"
-    : "bg-primary-50 text-primary-600 border border-primary-100 hover:bg-primary-100 hover:text-primary-800";
+  // Action icon buttons use Button variants (view=default/sidebar, edit=highlight/orange, delete=destructive/red)
+  const actionIconClass =
+    "h-10 w-10 p-0 transition-all duration-200 group/btn shadow-sm";
+  const actionIconClassLg =
+    "h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg shadow-sm";
 
   const rowHoverClass = isNrepOrg
     ? "hover:bg-[var(--org-primary)]/7"
@@ -1369,175 +1361,151 @@ export default function AdminAssetManagement() {
             </div>
           </div>
 
-          {/* Key Metrics */}
+          {/* Key Metrics — white cards, color only on the left edge */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            {/* Total Assets Card */}
-            <Card className={`${metricCardClass} border border-slate-200/80 !shadow-none`}>
+            {/* Total Assets */}
+            <Card
+              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-colors hover:bg-slate-50/80"
+              style={{ borderLeft: "3px solid var(--org-primary)" }}
+              onClick={() => setFilterStatus("all")}
+            >
               <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-2.5 ${metricIconClass} rounded-xl`}>
-                    <Package className="h-5 w-5 text-white" />
-                  </div>
-                  <Badge className={headerBadgeClass}>
-                    Total
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {assets.length}
-                  </div>
+                <div className="flex items-start justify-between mb-3">
                   <p className="text-sm font-medium text-slate-600">
                     Total Assets
                   </p>
-                  <p className={`text-xs ${metricSubtextClass}`}>
-                    {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
-                      ).length
-                    }{" "}
-                    available •{" "}
-                    {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
-                      ).length
-                    }{" "}
-                    in use
-                  </p>
+                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
+                    Total
+                  </Badge>
                 </div>
+                <div className="text-3xl font-bold text-slate-900">
+                  {assets.length}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {
+                    assets.filter(
+                      (a) =>
+                        a.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
+                    ).length
+                  }{" "}
+                  available •{" "}
+                  {
+                    assets.filter(
+                      (a) =>
+                        a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
+                    ).length
+                  }{" "}
+                  in use
+                </p>
               </CardContent>
             </Card>
 
-            {/* Available Assets Card */}
-            <Card className={`${primaryCardClass} border border-slate-200/80 !shadow-none`}>
+            {/* Available */}
+            <Card
+              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-colors hover:bg-slate-50/80"
+              style={{ borderLeft: "3px solid #059669" }}
+              onClick={() =>
+                setFilterStatus(ENUMS.AVAILABLE_STATUS.AVAILABLE)
+              }
+            >
               <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-2.5 ${primaryIconClass} rounded-xl`}>
-                    <CheckCircle className="h-5 w-5 text-white" />
-                  </div>
-                  <Badge className={primaryBadgeClass}>
+                <div className="flex items-start justify-between mb-3">
+                  <p className="text-sm font-medium text-slate-600">Available</p>
+                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
                     Ready
                   </Badge>
                 </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
-                      ).length
-                    }
-                  </div>
-                  <p className="text-sm font-medium text-slate-600">
-                    Available
-                  </p>
-                  <p
-                    className={`text-xs ${
-                      isNrepOrg ? "text-[var(--org-primary)]/80" : "text-primary-600"
-                    }`}
-                  >
-                    Ready for deployment
-                  </p>
+                <div className="text-3xl font-bold text-slate-900">
+                  {
+                    assets.filter(
+                      (a) =>
+                        a.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
+                    ).length
+                  }
                 </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Ready for deployment
+                </p>
               </CardContent>
             </Card>
 
-            {/* In Use Assets Card */}
-            <Card className={`${highlightCardClass} border border-slate-200/80 !shadow-none`}>
+            {/* In Use */}
+            <Card
+              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-colors hover:bg-slate-50/80"
+              style={{ borderLeft: "3px solid var(--org-highlight)" }}
+              onClick={() => setFilterStatus(ENUMS.AVAILABLE_STATUS.IN_USE)}
+            >
               <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-2.5 ${highlightIconClass} rounded-xl`}>
-                    <Clock className="h-5 w-5 text-white" />
-                  </div>
-                  <Badge className={highlightBadgeClass}>
+                <div className="flex items-start justify-between mb-3">
+                  <p className="text-sm font-medium text-slate-600">In Use</p>
+                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
                     Active
                   </Badge>
                 </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
-                      ).length
-                    }
-                  </div>
-                  <p className="text-sm font-medium text-slate-600">In Use</p>
-                  <p
-                    className={`text-xs ${
-                      isNrepOrg
-                        ? "text-[var(--org-highlight)]/80"
-                        : "text-orange-600"
-                    }`}
-                  >
-                    Currently assigned
-                  </p>
+                <div className="text-3xl font-bold text-slate-900">
+                  {
+                    assets.filter(
+                      (a) =>
+                        a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
+                    ).length
+                  }
                 </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Currently assigned
+                </p>
               </CardContent>
             </Card>
 
-            {/* Maintenance Assets Card */}
-            <Card className="bg-white border border-slate-200/80 !shadow-none">
+            {/* Maintenance */}
+            <Card
+              className="bg-white border border-slate-200/80 !shadow-none cursor-pointer transition-colors hover:bg-slate-50/80"
+              style={{ borderLeft: "3px solid #e11d48" }}
+              onClick={() =>
+                setFilterStatus(ENUMS.AVAILABLE_STATUS.MAINTENANCE)
+              }
+            >
               <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2.5 bg-gradient-to-br from-red-500 to-red-600 rounded-xl">
-                    <AlertTriangle className="h-5 w-5 text-white" />
-                  </div>
-                  <Badge className="bg-red-50 text-red-600 border-red-200">
-                    Alert
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus ===
-                          ENUMS.AVAILABLE_STATUS.MAINTENANCE
-                      ).length
-                    }
-                  </div>
+                <div className="flex items-start justify-between mb-3">
                   <p className="text-sm font-medium text-slate-600">
                     Maintenance
                   </p>
-                  <p className="text-xs text-red-600">Needs attention</p>
+                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
+                    Alert
+                  </Badge>
                 </div>
+                <div className="text-3xl font-bold text-slate-900">
+                  {
+                    assets.filter(
+                      (a) =>
+                        a.availableStatus ===
+                          ENUMS.AVAILABLE_STATUS.MAINTENANCE ||
+                        a.availableStatus ===
+                          ENUMS.AVAILABLE_STATUS.REPAIR_REQUIRED
+                    ).length
+                  }
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Needs attention</p>
               </CardContent>
             </Card>
 
-            {/* Staff Card */}
+            {/* Staff */}
             <Card
-              className="border border-slate-200/80 !shadow-none"
-              style={{
-                background:
-                  "linear-gradient(135deg, color-mix(in srgb, var(--org-primary-dark) 10%, white), white)",
-              }}
+              className="bg-white border border-slate-200/80 !shadow-none"
+              style={{ borderLeft: "3px solid #7c3aed" }}
             >
               <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div
-                    className="p-2.5 rounded-xl"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, var(--org-primary-dark), var(--org-primary))",
-                    }}
-                  >
-                    <Users className="h-5 w-5 text-white" />
-                  </div>
-                  <Badge className={headerBadgeClass}>
+                <div className="flex items-start justify-between mb-3">
+                  <p className="text-sm font-medium text-slate-600">Staff</p>
+                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">
                     Team
                   </Badge>
                 </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">
-                    {staffMap.size || 0}
-                  </div>
-                  <p className="text-sm font-medium text-slate-600">Staff</p>
-                  <p className="text-xs text-[var(--org-primary-dark)]">
-                    Linked custodians
-                  </p>
+                <div className="text-3xl font-bold text-slate-900">
+                  {staffMap.size || 0}
                 </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Linked custodians
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -1786,7 +1754,7 @@ export default function AdminAssetManagement() {
                 </TableHeader>
                 <TableBody>
                   {filteredAssets.length > 0 ? (
-                    filteredAssets.map((asset, index) => (
+                    pagedAssets.map((asset, index) => (
                       <TableRow
                         key={asset.$id}
                         className={`${rowHoverClass} transition-colors duration-200 group border-b border-gray-100/50`}
@@ -1877,29 +1845,29 @@ export default function AdminAssetManagement() {
                           <div className="flex items-center justify-center space-x-2">
                             <Button
                               asChild
-                              variant="ghost"
+                              variant="default"
                               size="sm"
-                              className={`h-10 w-10 p-0 transition-all duration-200 group/btn ${actionButtonClass}`}
+                              className={actionIconClass}
                             >
                               <Link href={`/assets/${asset.$id}?view=admin`}>
-                                <Eye className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
+                                <Eye className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                               </Link>
                             </Button>
                             <Button
                               asChild
-                              variant="ghost"
+                              variant="highlight"
                               size="sm"
-                              className={`h-10 w-10 p-0 transition-all duration-200 group/btn ${actionEditButtonClass}`}
+                              className={actionIconClass}
                             >
                               <Link href={`/admin/assets/${asset.$id}/edit`}>
-                                <Edit className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
+                                <Edit className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                               </Link>
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="destructive"
                               size="sm"
                               onClick={() => handleDeleteAsset(asset)}
-                              className="h-10 w-10 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 group/btn"
+                              className={actionIconClass}
                             >
                               <Trash2 className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                             </Button>
@@ -1940,7 +1908,7 @@ export default function AdminAssetManagement() {
               <div className="p-6">
                 {filteredAssets.length > 0 ? (
                   <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                    {filteredAssets.map((asset) => {
+                    {pagedAssets.map((asset) => {
                       const updatedAtLabel = asset.$updatedAt
                         ? new Date(asset.$updatedAt).toLocaleDateString()
                         : "–";
@@ -2044,9 +2012,9 @@ export default function AdminAssetManagement() {
                               <div className="flex items-center gap-2">
                                 <Button
                                   asChild
-                                  variant="ghost"
+                                  variant="default"
                                   size="sm"
-                                  className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionButtonClass}`}
+                                  className={actionIconClassLg}
                                 >
                                   <Link href={`/assets/${asset.$id}?view=admin`}>
                                     <Eye className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
@@ -2054,19 +2022,19 @@ export default function AdminAssetManagement() {
                                 </Button>
                                 <Button
                                   asChild
-                                  variant="ghost"
+                                  variant="highlight"
                                   size="sm"
-                                  className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionEditButtonClass}`}
+                                  className={actionIconClassLg}
                                 >
                                   <Link href={`/admin/assets/${asset.$id}/edit`}>
                                     <Edit className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                                   </Link>
                                 </Button>
                                 <Button
-                                  variant="ghost"
+                                  variant="destructive"
                                   size="sm"
                                   onClick={() => handleDeleteAsset(asset)}
-                                  className="h-11 w-11 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 group/btn rounded-lg"
+                                  className={actionIconClassLg}
                                 >
                                   <Trash2 className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                                 </Button>
@@ -2084,6 +2052,17 @@ export default function AdminAssetManagement() {
                 )}
               </div>
             )}
+
+            <div className="px-6 pb-6">
+              <ListPagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalItems}
+                pageSize={PAGE_SIZE}
+                onPageChange={setCurrentPage}
+                itemLabel="assets"
+              />
+            </div>
           </div>
         </div>
       </div>

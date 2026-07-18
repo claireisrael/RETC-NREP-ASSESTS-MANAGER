@@ -15,29 +15,31 @@ const OrgThemeContext = createContext({
   setOrgCode: () => {},
 });
 
-const CSS_VARIABLES = [
-  "primary",
-  "primaryDark",
-  "accent",
-  "accentDark",
-  "background",
-  "surface",
-  "muted",
-  "gradientFrom",
-  "gradientTo",
-  "heroAccentA",
-  "heroAccentB",
-  "heroAccentC",
-];
+const CSS_VARIABLES = {
+  primary: "--org-primary",
+  primaryDark: "--org-primary-dark",
+  accent: "--org-accent",
+  accentDark: "--org-accent-dark",
+  background: "--org-background",
+  surface: "--org-surface",
+  muted: "--org-muted",
+  gradientFrom: "--org-gradient-from",
+  gradientTo: "--org-gradient-to",
+  heroAccentA: "--org-hero-accent-a",
+  heroAccentB: "--org-hero-accent-b",
+  heroAccentC: "--org-hero-accent-c",
+  highlight: "--org-highlight",
+  highlightDark: "--org-highlight-dark",
+};
 
 function applyThemeToCssVariables(theme) {
   if (typeof document === "undefined" || !theme?.colors) return;
   const root = document.documentElement;
 
-  CSS_VARIABLES.forEach((key) => {
+  Object.entries(CSS_VARIABLES).forEach(([key, cssVar]) => {
     const value = theme.colors[key];
     if (value) {
-      root.style.setProperty(`--org-${key}`, value);
+      root.style.setProperty(cssVar, value);
     }
   });
 }

@@ -12,6 +12,8 @@ import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 export default function NewRequestPage() {
   const searchParams = useSearchParams();
   const typeParam = searchParams.get("type")?.toLowerCase() || "asset";
+  const itemIdParam = searchParams.get("itemId");
+  const itemsParam = searchParams.get("items");
   const { theme } = useOrgTheme();
 
   const { itemType, title, subtitle, icon: Icon } = useMemo(() => {
@@ -30,6 +32,18 @@ export default function NewRequestPage() {
       icon: FileText,
     };
   }, [typeParam]);
+
+  const initialItemIds = useMemo(() => {
+    const ids = [];
+    if (itemIdParam) ids.push(itemIdParam);
+    if (itemsParam) {
+      itemsParam.split(",").forEach((part) => {
+        const trimmed = part.trim();
+        if (trimmed) ids.push(trimmed);
+      });
+    }
+    return [...new Set(ids)];
+  }, [itemIdParam, itemsParam]);
 
   const backgroundColor = theme?.colors?.background || "#f3f4f6";
   const headerAccentFrom = theme?.colors?.primary || "#0E6370";
@@ -79,7 +93,7 @@ export default function NewRequestPage() {
           </div>
         </div>
 
-        <RequestForm itemType={itemType} />
+        <RequestForm itemType={itemType} initialItemIds={initialItemIds} />
       </div>
     </div>
   );

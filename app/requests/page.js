@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -19,8 +19,6 @@ import {
   Search,
   Filter,
   Calendar,
-  Clock,
-  Package,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -33,17 +31,24 @@ import {
   assetRequestsService,
   assetsService,
 } from "../../lib/appwrite/provider.js";
-import { assetImageService } from "../../lib/appwrite/image-service.js";
 import { getCurrentStaff } from "../../lib/utils/auth.js";
 import { ENUMS } from "../../lib/appwrite/config.js";
 import { useOrgTheme } from "../../components/providers/org-theme-provider";
 import {
   aggregateResolvedItems,
   formatItemQuantityLabel,
+  summarizeRequestPurpose,
+  formatRequestDateRange,
 } from "../../lib/utils/requested-items.js";
 import { Query } from "appwrite";
 import { PageLoading } from "../../components/ui/loading";
-import { formatCategory, hexToRgba, getConsumableStatus } from "../../lib/utils/mappings.js";
+import { hexToRgba } from "../../lib/utils/mappings.js";
+import {
+  ListPagination,
+  paginateItems,
+} from "../../components/ui/list-pagination";
+
+const PAGE_SIZE = 12;
 
 export default function MyRequestsPage() {
   const [requests, setRequests] = useState([]);
@@ -52,18 +57,12 @@ export default function MyRequestsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const { theme } = useOrgTheme();
-  const primaryColor = theme?.colors?.primary || "#0E6370";
-  const accentColor = theme?.colors?.accent || primaryColor;
-  const gradientFrom = theme?.colors?.gradientFrom || `${primaryColor}d9`;
-  const gradientTo = theme?.colors?.gradientTo || `${accentColor}b3`;
-  const highlightColor = theme?.colors?.highlight || "#f7901e";
+  const highlightColor =
+    theme?.colors?.highlight || theme?.colors?.accent || "#EFA74F";
   const highlightSoft = hexToRgba(highlightColor, 0.12);
   const highlightBorder = hexToRgba(highlightColor, 0.35);
-  const highlightBadge = `linear-gradient(135deg, ${hexToRgba(
-    highlightColor,
-    0.18
-  )}, ${hexToRgba(primaryColor, 0.07)})`;
 
   useEffect(() => {
     loadData();
@@ -75,6 +74,10 @@ export default function MyRequestsPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staff, statusFilter, searchTerm, dateFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, searchTerm, dateFilter]);
 
   const loadData = async () => {
     try {
@@ -206,7 +209,6 @@ export default function MyRequestsPage() {
 
   // Helper functions for cleaner code
   const formatDate = (dateString) => new Date(dateString).toLocaleDateString();
-  const formatDateTime = (dateString) => new Date(dateString).toLocaleString();
 
   const clearFilters = () => {
     setStatusFilter("all");
@@ -256,6 +258,13 @@ export default function MyRequestsPage() {
     });
   };
 
+  const filteredRequests = getFilteredRequests();
+  const pagination = useMemo(
+    () => paginateItems(filteredRequests, currentPage, PAGE_SIZE),
+    [filteredRequests, currentPage]
+  );
+  const pagedRequests = pagination.items;
+
   if (loading) {
     return <PageLoading message="Loading your requests..." />;
   }
@@ -280,7 +289,8 @@ export default function MyRequestsPage() {
             </div>
             <Button
               asChild
-              className="bg-org-gradient text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 w-full sm:w-auto"
+              variant="request"
+              className="shadow-xl hover:shadow-2xl transition-all duration-300 w-full sm:w-auto"
             >
               <Link
                 href="/requests/new?type=asset"
@@ -355,7 +365,7 @@ export default function MyRequestsPage() {
         </div>
 
         {/* Requests List */}
-        {requests.length === 0 ? (
+        {filteredRequests.length === 0 ? (
           <Card className="bg-white/90 backdrop-blur-sm border border-gray-200/60 shadow-xl rounded-2xl">
             <CardContent className="text-center py-16">
               <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-sidebar-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -398,84 +408,57 @@ export default function MyRequestsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-6">
-            {requests.map((request) => {
+          <div className="space-y-3">
+            {pagedRequests.map((request) => {
               const StatusIcon = getStatusIcon(request.status);
+              const aggregated = aggregateResolvedItems(request.assets || []);
+              const purposeSummary = summarizeRequestPurpose(request.purpose);
+              const dateRange = formatRequestDateRange(
+                request.issueDate,
+                request.expectedReturnDate,
+                formatDate
+              );
+              const decisionNote =
+                request.decisionNotes &&
+                String(request.decisionNotes).trim().length > 0
+                  ? String(request.decisionNotes).trim().length > 100
+                    ? `${String(request.decisionNotes).trim().slice(0, 99)}…`
+                    : String(request.decisionNotes).trim()
+                  : null;
+
               return (
                 <Card
                   key={request.$id}
-                  className="bg-white/90 backdrop-blur-sm border border-gray-200/60 hover:shadow-2xl hover:scale-105 transition-all duration-500 group cursor-pointer animate-in fade-in slide-in-from-bottom-4 rounded-2xl"
+                  className="bg-white border border-gray-200/80 shadow-sm hover:shadow-md transition-shadow duration-200 rounded-xl"
                 >
-                  <CardContent className="p-4 sm:p-6 lg:p-8">
-                    <div className="space-y-4">
-                      {/* Header with mobile-optimized layout */}
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                          <h3 className="text-lg sm:text-xl font-bold text-gray-900 group-hover:text-[var(--org-primary)] transition-colors duration-300">
+                  <CardContent className="p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-gray-900">
                             Request #{request.$id.slice(-8)}
                           </h3>
                           <Badge
                             className={`${getStatusBadgeColor(
                               request.status
-                            )} shadow-md w-fit`}
+                            )} shadow-none`}
                           >
                             <StatusIcon className="w-3 h-3 mr-1" />
-                            <span className="text-xs sm:text-sm">
+                            <span className="text-xs">
                               {request.status.replace(/_/g, " ")}
                             </span>
                           </Badge>
+                          <span className="text-xs text-gray-500">
+                            Created {formatDate(request.$createdAt)}
+                          </span>
                         </div>
-                      </div>
 
-                      {/* Purpose */}
-                      <p className="text-gray-700 text-base sm:text-lg font-medium">
-                        {request.purpose}
-                      </p>
-
-                      {/* Mobile-optimized date information */}
-                      <div className="space-y-2 bg-gray-50/50 rounded-xl p-3">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Calendar className="w-4 h-4 text-[var(--org-primary)] flex-shrink-0" />
-                          <span className="truncate">
-                            <strong>Created:</strong>{" "}
-                            {formatDate(request.$createdAt)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Clock className="w-4 h-4 text-sidebar-600 flex-shrink-0" />
-                          <span className="truncate">
-                            <strong>Issue:</strong>{" "}
-                            {formatDate(request.issueDate)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Clock className="w-4 h-4 text-primary-600 flex-shrink-0" />
-                          <span className="truncate">
-                            <strong>Return:</strong>{" "}
-                            {formatDate(request.expectedReturnDate)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Requested Items — name × quantity */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <Package className="w-5 h-5 text-primary-600" />
-                          <span className="text-base font-semibold text-gray-700">
-                            Requested Items (
-                            {
-                              aggregateResolvedItems(request.assets || [])
-                                .length
-                            }
-                            )
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {aggregateResolvedItems(request.assets || []).map(
-                            ({ item, quantity, id }) => (
+                        <div className="flex flex-wrap gap-1.5">
+                          {aggregated.length > 0 ? (
+                            aggregated.slice(0, 4).map(({ item, quantity, id }) => (
                               <Badge
                                 key={id}
-                                className="text-sm border px-3 py-1.5 shadow-sm"
+                                className="text-xs border px-2 py-0.5 font-medium"
                                 style={{
                                   background: highlightSoft,
                                   borderColor: highlightBorder,
@@ -484,51 +467,61 @@ export default function MyRequestsPage() {
                               >
                                 {formatItemQuantityLabel(item, quantity)}
                               </Badge>
-                            )
-                          )}
-                          {(request.assets || []).length === 0 && (
-                            <span className="text-sm text-gray-500">
+                            ))
+                          ) : (
+                            <span className="text-xs text-gray-500">
                               No items specified
                             </span>
                           )}
+                          {aggregated.length > 4 ? (
+                            <Badge variant="secondary" className="text-xs">
+                              +{aggregated.length - 4} more
+                            </Badge>
+                          ) : null}
                         </div>
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                          {dateRange ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5 text-[var(--org-primary)]" />
+                              {dateRange}
+                            </span>
+                          ) : null}
+                          {purposeSummary ? (
+                            <span className="truncate max-w-full sm:max-w-md text-gray-600">
+                              {purposeSummary}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {decisionNote ? (
+                          <p className="text-xs text-gray-600 line-clamp-1">
+                            <span className="font-medium text-gray-700">
+                              Notes:
+                            </span>{" "}
+                            {decisionNote}
+                          </p>
+                        ) : null}
                       </div>
 
-                      {/* Decision Notes */}
-                      {request.decisionNotes && (
-                        <div className="bg-gradient-to-r from-gray-50 to-primary-50/30 rounded-xl p-4 border border-gray-200/60">
-                          <p className="text-sm text-gray-700">
-                            <strong className="text-primary-700">Notes:</strong>{" "}
-                            {request.decisionNotes}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Mobile-optimized Actions */}
-                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                        <Button
-                          asChild
-                          size="sm"
-                          className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 flex-1 sm:flex-none"
-                        >
+                      <div className="flex sm:flex-col gap-2 shrink-0">
+                        <Button asChild size="sm" variant="outline">
                           <Link
                             href={`/requests/${request.$id}`}
-                            className="flex items-center justify-center gap-2"
+                            className="flex items-center justify-center gap-1.5"
                           >
                             <Eye className="w-4 h-4" />
-                            <span className="hidden sm:inline">View</span>
-                            <span className="sm:hidden">View Details</span>
+                            View
                           </Link>
                         </Button>
                         {request.status === ENUMS.REQUEST_STATUS.PENDING && (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-red-600 border-2 border-red-300 hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100 hover:border-red-400 shadow-sm hover:shadow-md transition-all duration-300 flex-1 sm:flex-none"
+                            className="text-red-600 border-red-200 hover:bg-red-50"
                           >
                             <X className="w-4 h-4 mr-1" />
-                            <span className="hidden sm:inline">Cancel</span>
-                            <span className="sm:hidden">Cancel Request</span>
+                            Cancel
                           </Button>
                         )}
                       </div>
@@ -537,6 +530,15 @@ export default function MyRequestsPage() {
                 </Card>
               );
             })}
+
+            <ListPagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.totalItems}
+              pageSize={PAGE_SIZE}
+              onPageChange={setCurrentPage}
+              itemLabel="requests"
+            />
           </div>
         )}
       </div>

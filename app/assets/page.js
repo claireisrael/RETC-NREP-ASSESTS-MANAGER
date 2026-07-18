@@ -40,6 +40,7 @@ import {
   Clock,
   List,
   Grid3X3,
+  ShoppingCart,
 } from "lucide-react";
 import {
   assetsService,
@@ -63,6 +64,7 @@ import {
 } from "../../lib/utils/auth.js";
 import { assetImageService } from "../../lib/appwrite/image-service.js";
 import { Query } from "appwrite";
+import { ListPagination } from "../../components/ui/list-pagination";
 
 export default function AssetsPage() {
   const router = useRouter();
@@ -81,6 +83,7 @@ export default function AssetsPage() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const pageSize = 12;
 
   const [viewMode, setViewMode] = useState("cards");
@@ -118,6 +121,10 @@ export default function AssetsPage() {
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, categoryFilter, subcategoryFilter, statusFilter, departmentFilter]);
 
   useEffect(() => {
     loadAssets();
@@ -194,10 +201,12 @@ export default function AssetsPage() {
           assetMatchesSubcategory(asset, activeSubcategory)
         );
         const start = (currentPage - 1) * pageSize;
+        setTotalItems(assetsOnly.length);
         setTotalPages(Math.max(1, Math.ceil(assetsOnly.length / pageSize)));
         setAssets(assetsOnly.slice(start, start + pageSize));
       } else {
         setAssets(assetsOnly);
+        setTotalItems(result.total || assetsOnly.length);
         setTotalPages(
           Math.max(
             1,
@@ -275,7 +284,8 @@ export default function AssetsPage() {
               ) : (
                 <Button
                   onClick={() => router.push("/requests/new?type=asset")}
-                  className="bg-org-gradient hover:opacity-90 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                  variant="request"
+                  className="!bg-[var(--org-accent)] hover:!bg-[var(--org-accent-dark)] !text-white !border-[var(--org-accent)] shadow-lg hover:shadow-xl transition-all duration-300"
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   Request Asset
@@ -487,7 +497,8 @@ export default function AssetsPage() {
               ) : (
                 <Button
                   onClick={() => router.push("/requests/new?type=asset")}
-                  className="bg-org-gradient text-white shadow-lg hover:shadow-xl transition-transform duration-300 hover:-translate-y-0.5"
+                  variant="request"
+                  className="!bg-[var(--org-accent)] hover:!bg-[var(--org-accent-dark)] !text-white !border-[var(--org-accent)] shadow-lg hover:shadow-xl transition-transform duration-300 hover:-translate-y-0.5"
                 >
                   <FileText className="w-5 h-5 mr-2" />
                   Request Asset
@@ -572,7 +583,7 @@ export default function AssetsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-3 text-sm">
+                      <div className="flex items-center justify-end gap-2 text-sm">
                         <Button
                           asChild
                           type="button"
@@ -584,6 +595,25 @@ export default function AssetsPage() {
                             View
                           </Link>
                         </Button>
+                          {asset.availableStatus ===
+                          ENUMS.AVAILABLE_STATUS.AVAILABLE ? (
+                          <Button
+                            asChild
+                            type="button"
+                            variant="request"
+                            size="sm"
+                            className="inline-flex items-center gap-2"
+                          >
+                            <Link
+                              href={`/requests/new?type=asset&itemId=${encodeURIComponent(
+                                asset.$id
+                              )}`}
+                            >
+                              <ShoppingCart className="w-4 h-4" />
+                              Request
+                            </Link>
+                          </Button>
+                          ) : null}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -651,26 +681,22 @@ export default function AssetsPage() {
                       </div>
                     )}
 
-                    <div className="p-5">
-                      <div className="flex items-start justify-between mb-3">
-                        <h3 className="font-semibold text-gray-900 truncate flex-1 text-lg">
+                    <div className="p-4 space-y-3">
+                      <div>
+                        <h3 className="font-semibold text-gray-900 text-base leading-snug line-clamp-2">
                           {asset.name}
                         </h3>
-                        {asset.isPublic && (
-                          <Badge
-                            variant="outline"
-                            className="ml-2 text-xs bg-gradient-to-r from-green-100 to-green-200 text-green-800 border-green-300"
-                          >
-                            Public
-                          </Badge>
-                        )}
+                        <p className="text-xs font-medium text-gray-500 mt-1 uppercase tracking-wide">
+                          {formatCategory(asset.category)}
+                        </p>
+                        {asset.assetTag ? (
+                          <p className="text-xs text-gray-400 mt-0.5 truncate">
+                            {asset.assetTag}
+                          </p>
+                        ) : null}
                       </div>
 
-                      <p className="text-sm text-gray-600 mb-4 font-medium">
-                        {formatCategory(asset.category)}
-                      </p>
-
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="flex flex-wrap gap-1.5">
                         <Badge
                           className={`${getStatusBadgeColor(
                             asset.availableStatus
@@ -685,54 +711,78 @@ export default function AssetsPage() {
                         >
                           {asset.currentCondition.replace(/_/g, " ")}
                         </Badge>
+                        {asset.isPublic ? (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-green-300 text-green-800"
+                          >
+                            Public
+                          </Badge>
+                        ) : null}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600 mb-4">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-red-600" />
-                          <span>
+                      <div className="space-y-1.5 text-xs text-gray-600">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <MapPin className="h-3.5 w-3.5 text-red-600 shrink-0" />
+                          <span className="truncate">
                             {asset.locationName ||
                               asset.roomOrArea ||
                               "Not specified"}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-gray-400" />
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                           <span>
                             Updated{" "}
-                            <span className="font-medium text-gray-800">
-                              {asset.$updatedAt
-                                ? new Date(
-                                    asset.$updatedAt
-                                  ).toLocaleDateString()
-                                : "–"}
-                            </span>
+                            {asset.$updatedAt
+                              ? new Date(asset.$updatedAt).toLocaleDateString()
+                              : "–"}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-sm text-gray-500">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-gray-900">
-                            {asset.assetTag || "—"}
-                          </span>
-                          <span className="text-xs uppercase tracking-wide">
-                            Asset Tag
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <Button
+                          asChild
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-center"
+                        >
+                          <Link href={`/assets/${asset.$id}`}>
+                            <Eye className="w-4 h-4 mr-1.5" />
+                            View
+                          </Link>
+                        </Button>
+                        {asset.availableStatus ===
+                        ENUMS.AVAILABLE_STATUS.AVAILABLE ? (
                           <Button
                             asChild
                             type="button"
-                            variant="outline"
-                            className="flex items-center gap-2 rounded-full border-gray-200 text-gray-600 hover:bg-gray-100"
+                            variant="request"
+                            size="sm"
+                            className="w-full justify-center"
                           >
-                            <Link href={`/assets/${asset.$id}`}>
-                              <Eye className="w-4 h-4" />
-                              View
+                            <Link
+                              href={`/requests/new?type=asset&itemId=${encodeURIComponent(
+                                asset.$id
+                              )}`}
+                            >
+                              <ShoppingCart className="w-4 h-4 mr-1.5" />
+                              Request
                             </Link>
                           </Button>
-                        </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            className="w-full justify-center opacity-50"
+                          >
+                            Unavailable
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -741,6 +791,15 @@ export default function AssetsPage() {
             })}
           </div>
         )}
+
+        <ListPagination
+          page={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems || assets.length}
+          pageSize={12}
+          onPageChange={setCurrentPage}
+          itemLabel="assets"
+        />
       </div>
     </div>
   );

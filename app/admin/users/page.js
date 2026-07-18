@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   Card,
@@ -15,6 +15,10 @@ import { Badge } from "../../../components/ui/badge";
 import { DataTable } from "../../../components/ui/data-table";
 import { EmptyUsers } from "../../../components/ui/empty-state";
 import { PageLoading } from "../../../components/ui/loading";
+import {
+  ListPagination,
+  paginateItems,
+} from "../../../components/ui/list-pagination";
 import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 import {
   Dialog,
@@ -105,6 +109,8 @@ const getStatusBadgeClass = (active) => {
   return "bg-[var(--org-highlight)] text-white border-[var(--org-highlight-dark)]/35 shadow-sm";
 };
 
+const PAGE_SIZE = 15;
+
 export default function UserManagement() {
   const [currentStaff, setCurrentStaff] = useState(null);
   const [users, setUsers] = useState([]);
@@ -116,6 +122,7 @@ export default function UserManagement() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [creationStep, setCreationStep] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -576,6 +583,16 @@ export default function UserManagement() {
 
     return matchesSearch && matchesRole;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedRole]);
+
+  const pagination = useMemo(
+    () => paginateItems(filteredUsers, currentPage, PAGE_SIZE),
+    [filteredUsers, currentPage]
+  );
+  const pagedUsers = pagination.items;
 
   if (loading) {
     return <PageLoading message="Loading users..." />;
@@ -1321,7 +1338,7 @@ export default function UserManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.map((user) => (
+                {pagedUsers.map((user) => (
                   <TableRow
                     key={user.$id}
                     className="hover:bg-gray-50/50 transition-colors duration-200 group border-b border-gray-100/50"
@@ -1394,6 +1411,17 @@ export default function UserManagement() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+
+          <div className="px-6 pb-6">
+            <ListPagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.totalItems}
+              pageSize={PAGE_SIZE}
+              onPageChange={setCurrentPage}
+              itemLabel="users"
+            />
           </div>
         </div>
 

@@ -21,6 +21,7 @@ import {
 import { AssetOverview } from "../../../components/assets/asset-overview";
 import { AssetActivity } from "../../../components/assets/asset-activity";
 import { AssetCustody } from "../../../components/assets/asset-custody";
+import { MarkReturnedDialog } from "../../../components/assets/mark-returned-dialog";
 import { assetsService } from "../../../lib/appwrite/provider.js";
 import { assetImageService } from "../../../lib/appwrite/image-service.js";
 import { getAssetHolderName, isAssetHeld } from "../../../lib/utils/holders.js";
@@ -34,7 +35,16 @@ import {
   getConditionBadgeColor,
   formatCategory,
 } from "../../../lib/utils/mappings.js";
-import { ArrowLeft, ImageIcon, Edit3, Package, FileText, UserCheck } from "lucide-react";
+import { ENUMS } from "../../../lib/appwrite/config.js";
+import {
+  ArrowLeft,
+  ImageIcon,
+  Edit3,
+  Package,
+  FileText,
+  UserCheck,
+  RotateCcw,
+} from "lucide-react";
 
 export default function AssetDetailPage() {
   const params = useParams();
@@ -45,6 +55,7 @@ export default function AssetDetailPage() {
   const [holderName, setHolderName] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showReturnDialog, setShowReturnDialog] = useState(false);
 
   useEffect(() => {
     loadAssetData();
@@ -131,7 +142,9 @@ export default function AssetDetailPage() {
           </Alert>
           <div className="mt-4">
             <Button
-              className="bg-green-600 hover:bg-green-700 text-white"
+              variant="outline"
+              size="sm"
+              className="!bg-white !text-slate-700 !border-slate-300 hover:!bg-slate-50 shadow-none"
               onClick={handleBack}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -166,9 +179,9 @@ export default function AssetDetailPage() {
           {/* Back Button */}
           <div className="flex items-center gap-2">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="text-green-600 hover:text-green-700 hover:bg-green-50"
+              className="!bg-white !text-slate-700 !border-slate-300 hover:!bg-slate-50 shadow-none"
               onClick={handleBack}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -192,8 +205,18 @@ export default function AssetDetailPage() {
             {/* Request Asset button for regular users */}
             {getCurrentViewMode() === "user" && (
               <Button
-                onClick={() => router.push("/requests/new?type=asset")}
-                className="bg-primary-600 hover:bg-primary-700 text-white w-full sm:w-auto"
+                variant="request"
+                onClick={() =>
+                  router.push(
+                    `/requests/new?type=asset&itemId=${encodeURIComponent(
+                      asset.$id
+                    )}`
+                  )
+                }
+                className="w-full sm:w-auto"
+                disabled={
+                  asset.availableStatus !== ENUMS.AVAILABLE_STATUS.AVAILABLE
+                }
               >
                 <FileText className="w-4 h-4 mr-2" />
                 Request Asset
@@ -255,7 +278,7 @@ export default function AssetDetailPage() {
               <Button
                 asChild
                 variant="outline"
-                className="border-green-200 text-green-700 hover:bg-green-50 flex-1 sm:flex-none"
+                className="!bg-white !text-slate-700 !border-slate-300 hover:!bg-slate-50 flex-1 sm:flex-none"
               >
                 <Link
                   href={`/admin/assets/${asset.$id}/edit`}
@@ -265,18 +288,30 @@ export default function AssetDetailPage() {
                   Edit Asset
                 </Link>
               </Button>
-              <Button
-                asChild
-                className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
-              >
-                <Link
-                  href={`/admin/issue?asset=${asset.$id}`}
-                  className="flex items-center justify-center"
+              {isAssetHeld(asset) && (
+                <Button
+                  type="button"
+                  onClick={() => setShowReturnDialog(true)}
+                  className="bg-[var(--org-primary)] hover:bg-[var(--org-primary-dark)] text-white flex-1 sm:flex-none"
                 >
-                  <Package className="w-4 h-4 mr-2" />
-                  Issue Asset
-                </Link>
-              </Button>
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Mark as Returned
+                </Button>
+              )}
+              {asset.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE && (
+                <Button
+                  asChild
+                  className="bg-[var(--org-highlight,#EFA74F)] hover:opacity-90 text-white flex-1 sm:flex-none"
+                >
+                  <Link
+                    href={`/admin/issue?asset=${asset.$id}`}
+                    className="flex items-center justify-center"
+                  >
+                    <Package className="w-4 h-4 mr-2" />
+                    Issue Asset
+                  </Link>
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -360,9 +395,19 @@ export default function AssetDetailPage() {
           </TabsContent>
 
           <TabsContent value="custody">
-            <AssetCustody assetId={asset.$id} />
+            <AssetCustody
+              assetId={asset.$id}
+              onReturnProcessed={loadAssetData}
+            />
           </TabsContent>
         </Tabs>
+
+        <MarkReturnedDialog
+          open={showReturnDialog}
+          onOpenChange={setShowReturnDialog}
+          asset={asset}
+          onSuccess={loadAssetData}
+        />
       </div>
     </div>
   );
