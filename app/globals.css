@@ -569,26 +569,71 @@ html[data-org="NREP"] .org-button--outline:hover {
 .org-button--accent {
   background-color: var(--org-accent);
   border-color: var(--org-accent);
+  color: #ffffff;
 }
 
 .org-button--accent:hover {
   background-color: var(--org-accent-dark);
   border-color: var(--org-accent-dark);
+  color: #ffffff;
 }
 
 .org-button--highlight {
   background-color: var(--org-highlight);
   border-color: var(--org-highlight);
+  color: #ffffff;
 }
 
 .org-button--highlight:hover {
   background-color: var(--org-highlight-dark);
   border-color: var(--org-highlight-dark);
+  color: #ffffff;
+}
+
+/* Request CTAs — always brand orange for NREP (never primary blue) */
+.org-button--request {
+  background-color: #efa74f !important;
+  border-color: #efa74f !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px -12px rgba(239, 167, 79, 0.85);
+}
+
+.org-button--request:hover {
+  background-color: #e08e2a !important;
+  border-color: #e08e2a !important;
+  color: #ffffff !important;
+}
+
+.org-button--request:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7), 0 0 0 4px #efa74f !important;
+}
+
+html[data-org="RETC"] .org-button--request {
+  background-color: var(--org-accent) !important;
+  border-color: var(--org-accent) !important;
+}
+
+html[data-org="RETC"] .org-button--request:hover {
+  background-color: var(--org-accent-dark) !important;
+  border-color: var(--org-accent-dark) !important;
 }
 
 html[data-org="NREP"] .org-button--accent,
-html[data-org="NREP"] .org-button--highlight {
-  color: #ffffff;
+html[data-org="NREP"] .org-button--highlight,
+html[data-org="NREP"] .org-button--request {
+  color: #ffffff !important;
+}
+
+/* Solid orange utility for non-Button CTAs */
+.bg-brand-orange {
+  background-color: #efa74f !important;
+  color: #ffffff !important;
+}
+
+.bg-brand-orange:hover,
+.hover\:bg-brand-orange:hover {
+  background-color: #e08e2a !important;
+  color: #ffffff !important;
 }
 
 html[data-org="NREP"] .org-button--outline:hover {

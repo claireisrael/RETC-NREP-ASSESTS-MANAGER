@@ -10,6 +10,7 @@ const buttonVariants = {
   link: "org-button--link",
   accent: "org-button--accent",
   highlight: "org-button--highlight",
+  request: "org-button--request",
 }
 
 const buttonSizes = {

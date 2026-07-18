@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -92,6 +92,10 @@ import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 import { getConsumableCategoriesForOrg } from "../../../lib/constants/consumable-categories.js";
 import { getCurrentOrgId } from "../../../lib/utils/org.js";
 import { PageLoading } from "../../../components/ui/loading";
+import {
+  ListPagination,
+  paginateItems,
+} from "../../../components/ui/list-pagination";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -103,8 +107,11 @@ function createDebounce(fn, wait = 300) {
   };
 }
 
+const PAGE_SIZE = 15;
+
 export default function AdminConsumablesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToastContext();
   const { confirm } = useConfirmation();
   const { theme, orgCode } = useOrgTheme();
@@ -130,9 +137,12 @@ export default function AdminConsumablesPage() {
   const isNrepOrg = normalizedOrgCode === "NREP";
   const ADMIN_PLACEHOLDER_PROJECT_ID = "ADMIN";
   const [viewMode, setViewMode] = useState("table");
+  const [currentPage, setCurrentPage] = useState(1);
   const [scopeFilter, setScopeFilter] = useState(() =>
     isNrepOrg ? ENUMS.CONSUMABLE_SCOPE.PROJECT : ENUMS.CONSUMABLE_SCOPE.ADMIN
   );
+  // When opened from dashboard stock alerts, show both Admin + Project scopes
+  const [ignoreScopeFilter, setIgnoreScopeFilter] = useState(false);
 
   // Project filter state
   const [projectFilter, setProjectFilter] = useState("all");
@@ -165,6 +175,19 @@ export default function AdminConsumablesPage() {
     );
   }, [isNrepOrg]);
 
+  // Deep-link from dashboard stock alerts: ?status=LOW_STOCK|OUT_OF_STOCK
+  useEffect(() => {
+    const statusParam = (searchParams?.get("status") || "").toUpperCase();
+    const validStatuses = Object.values(ENUMS.CONSUMABLE_STATUS);
+    if (statusParam && validStatuses.includes(statusParam)) {
+      setFilterStatus(statusParam);
+      // Show matching items across Admin + Project so alert counts match the list
+      setIgnoreScopeFilter(true);
+      setProjectFilter("all");
+      setCurrentPage(1);
+    }
+  }, [searchParams]);
+
   const handleViewModeChange = (mode) => {
     if (mode === "table" || mode === "grid") {
       setViewMode(mode);
@@ -184,6 +207,7 @@ export default function AdminConsumablesPage() {
 
   const handleScopeFilterChange = (scope) => {
     if (!isNrepOrg) return;
+    setIgnoreScopeFilter(false);
     setScopeFilter(scope);
     setFilterCategory("all");
     setFilterStatus("all");
@@ -192,6 +216,10 @@ export default function AdminConsumablesPage() {
         ? defaultProjectId || "all"
         : "all"
     );
+    // Clear deep-link query so scope chips stay in control
+    if (searchParams?.get("status")) {
+      router.replace("/admin/consumables");
+    }
   };
 
   const rowHoverClass = isNrepOrg
@@ -211,12 +239,10 @@ export default function AdminConsumablesPage() {
   const headerBadgeClass = isNrepOrg
     ? "bg-[var(--org-primary)]/18 text-[var(--org-primary)] border-[var(--org-primary)]/25"
     : "bg-primary-500/20 text-primary-600 border-primary-500/30";
-  const actionButtonClass = isNrepOrg
-    ? "bg-[var(--org-primary)]/12 text-[var(--org-primary)] border border-[var(--org-primary)]/30 hover:bg-[var(--org-primary)]/18 hover:text-white hover:shadow-lg"
-    : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 hover:text-gray-900";
-  const actionEditButtonClass = isNrepOrg
-    ? "bg-[var(--org-highlight)]/14 text-[var(--org-highlight)] border border-[var(--org-highlight)]/30 hover:bg-[var(--org-highlight)]/20 hover:text-white hover:shadow-lg"
-    : "bg-primary-50 text-primary-600 border border-primary-100 hover:bg-primary-100 hover:text-primary-800";
+  // Action icon buttons use Button variants (view=default/sidebar, edit=highlight/orange, delete=destructive/red)
+  const actionIconClass =
+    "h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg shadow-sm";
+  const actionIconClassLg = actionIconClass;
   const locationIconClass = "text-red-600";
   const locationTextClass = isNrepOrg
     ? "text-[var(--org-primary-dark)]"
@@ -748,7 +774,10 @@ export default function AdminConsumablesPage() {
       filterStatus === "all" || getStatus(consumable) === filterStatus;
 
     const itemScope = resolveConsumableScope(consumable);
-    const matchesScope = !isNrepOrg || itemScope === scopeFilter;
+    const matchesScope =
+      !isNrepOrg ||
+      ignoreScopeFilter ||
+      itemScope === scopeFilter;
 
     const itemProjectId = consumable.projectId; // Use consumable.projectId
     const normalizedItemProjectId = itemProjectId
@@ -772,6 +801,23 @@ export default function AdminConsumablesPage() {
       matchesScope
     );
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchTerm,
+    filterCategory,
+    filterStatus,
+    scopeFilter,
+    projectFilter,
+    ignoreScopeFilter,
+  ]);
+
+  const pagination = useMemo(
+    () => paginateItems(filteredConsumables, currentPage, PAGE_SIZE),
+    [filteredConsumables, currentPage]
+  );
+  const pagedConsumables = pagination.items;
 
   if (loading) {
     return <PageLoading message="Loading consumables..." />;
@@ -1444,6 +1490,7 @@ export default function AdminConsumablesPage() {
                       handleScopeFilterChange(ENUMS.CONSUMABLE_SCOPE.PROJECT)
                     }
                     className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all ${
+                      !ignoreScopeFilter &&
                       scopeFilter === ENUMS.CONSUMABLE_SCOPE.PROJECT
                         ? "bg-org-gradient text-white shadow-md hover:bg-org-gradient"
                         : "text-slate-600 hover:text-[var(--org-primary)]"
@@ -1458,6 +1505,7 @@ export default function AdminConsumablesPage() {
                       handleScopeFilterChange(ENUMS.CONSUMABLE_SCOPE.ADMIN)
                     }
                     className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all ${
+                      !ignoreScopeFilter &&
                       scopeFilter === ENUMS.CONSUMABLE_SCOPE.ADMIN
                         ? "bg-org-gradient text-white shadow-md hover:bg-org-gradient"
                         : "text-slate-600 hover:text-[var(--org-primary)]"
@@ -1468,6 +1516,39 @@ export default function AdminConsumablesPage() {
                 </div>
               )}
             </div>
+
+            {(filterStatus === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK ||
+              filterStatus === ENUMS.CONSUMABLE_STATUS.LOW_STOCK) && (
+              <div
+                className={`mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border px-4 py-3 ${
+                  filterStatus === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
+                    ? "bg-red-50 border-red-200 text-red-900"
+                    : "bg-yellow-50 border-yellow-200 text-yellow-900"
+                }`}
+              >
+                <p className="text-sm font-medium">
+                  Showing{" "}
+                  {filterStatus === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
+                    ? "out of stock"
+                    : "low stock"}{" "}
+                  items only
+                  {ignoreScopeFilter ? " (all scopes)" : ""}.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="!bg-white !text-slate-700 shrink-0"
+                  onClick={() => {
+                    setFilterStatus("all");
+                    setIgnoreScopeFilter(false);
+                    router.replace("/admin/consumables");
+                  }}
+                >
+                  Clear status filter
+                </Button>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="space-y-3">
@@ -1511,7 +1592,25 @@ export default function AdminConsumablesPage() {
                 <Label className="text-sm font-medium text-slate-700">
                   Status
                 </Label>
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <Select
+                  value={filterStatus}
+                  onValueChange={(value) => {
+                    setFilterStatus(value);
+                    if (value === "all") {
+                      setIgnoreScopeFilter(false);
+                      if (searchParams?.get("status")) {
+                        router.replace("/admin/consumables");
+                      }
+                    } else {
+                      // Keep alert-style cross-scope view while a stock status is selected
+                      setIgnoreScopeFilter(true);
+                      setProjectFilter("all");
+                      router.replace(
+                        `/admin/consumables?status=${encodeURIComponent(value)}`
+                      );
+                    }
+                  }}
+                >
                   <SelectTrigger className="h-11 border-gray-200 focus:border-primary-500 focus:ring-primary-500/20 transition-all duration-200">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
@@ -1637,7 +1736,7 @@ export default function AdminConsumablesPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredConsumables.length > 0 ? (
-                    filteredConsumables.map((consumable, index) => (
+                    pagedConsumables.map((consumable, index) => (
                       <TableRow
                         key={consumable.$id}
                         className={`${rowHoverClass} transition-colors duration-200 group border-b border-gray-100/50`}
@@ -1728,33 +1827,33 @@ export default function AdminConsumablesPage() {
                           <div className="flex items-center justify-center space-x-2">
                             <Button
                               asChild
-                              variant="ghost"
+                              variant="default"
                               size="sm"
-                              className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionButtonClass}`}
+                              className={actionIconClass}
                             >
                               <Link
                                 href={`/admin/consumables/${consumable.$id}`}
                               >
-                                <Eye className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
+                                <Eye className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                               </Link>
                             </Button>
                             <Button
                               asChild
-                              variant="ghost"
+                              variant="highlight"
                               size="sm"
-                              className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionEditButtonClass}`}
+                              className={actionIconClass}
                             >
                               <Link
                                 href={`/admin/consumables/${consumable.$id}/edit`}
                               >
-                                <Edit className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
+                                <Edit className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                               </Link>
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="destructive"
                               size="sm"
                               onClick={() => handleDeleteConsumable(consumable)}
-                              className="h-11 w-11 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 group/btn rounded-lg"
+                              className={actionIconClass}
                             >
                               <Trash2 className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                             </Button>
@@ -1795,7 +1894,7 @@ export default function AdminConsumablesPage() {
               <div className="p-6">
                 {filteredConsumables.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {filteredConsumables.map((consumable) => {
+                    {pagedConsumables.map((consumable) => {
                       const status = getStatus(consumable);
                       const updatedAtLabel = consumable.$updatedAt
                         ? new Date(consumable.$updatedAt).toLocaleDateString()
@@ -1885,29 +1984,29 @@ export default function AdminConsumablesPage() {
                               <div className="flex items-center gap-2">
                                 <Button
                                   asChild
-                                  variant="ghost"
+                                  variant="default"
                                   size="sm"
-                                  className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionButtonClass}`}
+                                  className={actionIconClassLg}
                                 >
                                   <Link href={`/admin/consumables/${consumable.$id}`}>
-                                    <Eye className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
+                                    <Eye className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                                   </Link>
                                 </Button>
                                 <Button
                                   asChild
-                                  variant="ghost"
+                                  variant="highlight"
                                   size="sm"
-                                  className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionEditButtonClass}`}
+                                  className={actionIconClassLg}
                                 >
                                   <Link href={`/admin/consumables/${consumable.$id}/edit`}>
-                                    <Edit className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
+                                    <Edit className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                                   </Link>
                                 </Button>
                                 <Button
-                                  variant="ghost"
+                                  variant="destructive"
                                   size="sm"
                                   onClick={() => handleDeleteConsumable(consumable)}
-                                  className="h-11 w-11 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 group/btn rounded-lg"
+                                  className={actionIconClassLg}
                                 >
                                   <Trash2 className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                                 </Button>
@@ -1925,6 +2024,17 @@ export default function AdminConsumablesPage() {
                 )}
               </div>
             )}
+
+            <div className="px-6 pb-6">
+              <ListPagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalItems}
+                pageSize={PAGE_SIZE}
+                onPageChange={setCurrentPage}
+                itemLabel="consumables"
+              />
+            </div>
           </div>
         </div>
       </div>

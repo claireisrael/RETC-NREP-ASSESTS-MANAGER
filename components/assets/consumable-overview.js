@@ -8,6 +8,7 @@ import { Button } from "../ui/button";
 import {
   departmentsService,
   staffService,
+  projectsService,
 } from "../../lib/appwrite/provider.js";
 import { getConsumableRecipients } from "../../lib/utils/holders.js";
 import { APPWRITE_CONFIG, BUCKETS } from "../../lib/appwrite/config.js";
@@ -29,12 +30,18 @@ import {
 } from "../../lib/utils/auth.js";
 // import { ConsumableDistributionForm } from "./consumable-distribution-form.js";
 import { ConsumableStockForm } from "./consumable-stock-form.js";
+import { useOrgTheme } from "../providers/org-theme-provider";
+
+const ADMIN_PLACEHOLDER_PROJECT_ID = "ADMIN";
 
 export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
   const [department, setDepartment] = useState(null);
+  const [project, setProject] = useState(null);
   const [custodian, setCustodian] = useState(null);
   const [staff, setStaff] = useState(null);
   const [recipients, setRecipients] = useState([]);
+  const { orgCode } = useOrgTheme();
+  const isNrepOrg = (orgCode || "").toUpperCase() === "NREP";
 
   useEffect(() => {
     loadRelatedData();
@@ -49,6 +56,23 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
       if (consumable.departmentId) {
         const deptData = await departmentsService.get(consumable.departmentId);
         setDepartment(deptData);
+      } else {
+        setDepartment(null);
+      }
+
+      const projectId = consumable.projectId;
+      if (
+        projectId &&
+        projectId !== ADMIN_PLACEHOLDER_PROJECT_ID
+      ) {
+        try {
+          const projectData = await projectsService.get(projectId);
+          setProject(projectData);
+        } catch {
+          setProject(null);
+        }
+      } else {
+        setProject(null);
       }
 
       if (consumable.custodianStaffId) {
@@ -274,6 +298,21 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {isNrepOrg && (
+            <div>
+              <h4 className="font-semibold text-gray-700 mb-1">Belongs to</h4>
+              <p className="text-sm bg-purple-50 px-3 py-2 rounded border border-purple-200">
+                {!consumable.projectId ||
+                consumable.projectId === ADMIN_PLACEHOLDER_PROJECT_ID
+                  ? "Administrative (general / shared)"
+                  : project?.name ||
+                    project?.title ||
+                    project?.code ||
+                    "Project consumable"}
+              </p>
+            </div>
+          )}
+
           {department && (
             <div>
               <h4 className="font-semibold text-gray-700 mb-1">Department</h4>

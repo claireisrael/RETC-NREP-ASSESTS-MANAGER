@@ -124,7 +124,7 @@ export default function ConsumableDetailPage() {
           <Button
             variant="outline"
             onClick={() => router.back()}
-            className="flex items-center"
+            className="!bg-white !text-slate-700 !border-slate-300 hover:!bg-slate-50 shadow-none flex items-center"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
@@ -137,8 +137,14 @@ export default function ConsumableDetailPage() {
           </div>
         </div>
         <Button
-          onClick={() => router.push("/requests/new?type=consumable")}
-          className="bg-green-600 hover:bg-green-700"
+          variant="request"
+          onClick={() =>
+            router.push(
+              `/requests/new?type=consumable&itemId=${encodeURIComponent(
+                consumable.$id
+              )}`
+            )
+          }
           disabled={getConsumableStatus(consumable) === "OUT_OF_STOCK"}
         >
           <ShoppingCart className="w-4 h-4 mr-2" />

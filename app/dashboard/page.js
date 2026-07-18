@@ -583,7 +583,7 @@ export default function DashboardPage() {
                 {/* Primary actions */}
                 <Link
                   href="/requests/new?type=asset"
-                  className="group relative flex items-center gap-4 overflow-hidden rounded-2xl bg-org-gradient p-4 text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                  className="group relative flex items-center gap-4 overflow-hidden rounded-2xl bg-brand-orange p-4 text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                 >
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
                     <Send className="h-6 w-6" />
@@ -596,7 +596,7 @@ export default function DashboardPage() {
 
                 <Link
                   href="/requests/new?type=consumable"
-                  className="group relative flex items-center gap-4 overflow-hidden rounded-2xl bg-org-gradient p-4 text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                  className="group relative flex items-center gap-4 overflow-hidden rounded-2xl bg-brand-orange p-4 text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                 >
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
                     <ShoppingCart className="h-6 w-6" />

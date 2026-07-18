@@ -198,11 +198,15 @@ export default function Sidebar() {
         staffMember &&
         permissions.canApproveL2(staffMember)
       ) {
-        // Superadmins: only count requests that have reached L2 (after L1).
+        // Superadmins: only count L2 requests assigned to them (or unassigned legacy).
         const l2Count = pending.filter((request) => {
           const stage =
             request?.approvalStage || ENUMS.APPROVAL_STAGE.L1;
-          return stage === ENUMS.APPROVAL_STAGE.L2;
+          if (stage !== ENUMS.APPROVAL_STAGE.L2) return false;
+          return (
+            !request.assignedL2StaffId ||
+            request.assignedL2StaffId === staffMember.$id
+          );
         }).length;
         setPendingRequestsCount(l2Count);
       } else {

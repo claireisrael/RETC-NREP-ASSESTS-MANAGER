@@ -76,6 +76,8 @@ import {
 import {
   aggregateResolvedItems,
   formatItemQuantityLabel,
+  summarizeRequestPurpose,
+  formatRequestDateRange,
 } from "../../../lib/utils/requested-items.js";
 import {
   assetRequestsService,
@@ -96,10 +98,17 @@ import {
   notifyConsumablesIssued,
   notifyDenied,
 } from "../../../lib/services/approval-notifications.js";
+import { listSuperadminStaff } from "../../../lib/utils/approvers.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import { Query } from "appwrite";
 import Link from "next/link";
 import { PageLoading, SectionLoading } from "../../../components/ui/loading";
+import {
+  ListPagination,
+  paginateItems,
+} from "../../../components/ui/list-pagination";
+
+const PAGE_SIZE = 15;
 
 // Helper function to format date
 const formatDate = (dateString) => {
@@ -161,6 +170,11 @@ export default function RequestQueue() {
   const [showDenialDialog, setShowDenialDialog] = useState(false);
   const [requestToDeny, setRequestToDeny] = useState(null);
   const [denialReason, setDenialReason] = useState("");
+  const [showL2AssignDialog, setShowL2AssignDialog] = useState(false);
+  const [requestToAssignL2, setRequestToAssignL2] = useState(null);
+  const [selectedL2StaffId, setSelectedL2StaffId] = useState("");
+  const [superadmins, setSuperadmins] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -241,6 +255,9 @@ export default function RequestQueue() {
         loadAssets(),
         loadStaff(),
         loadDepartments(),
+        listSuperadminStaff()
+          .then((list) => setSuperadmins(list || []))
+          .catch(() => setSuperadmins([])),
       ]);
     } catch (error) {
       setError("Failed to load data. Please refresh the page.");
@@ -302,7 +319,7 @@ export default function RequestQueue() {
       ? ENUMS.APPROVAL_STAGE.L1
       : request?.status);
 
-  const handleApprove = async (request) => {
+  const handleApprove = async (request, options = {}) => {
     setDecisionLoading(true);
     setError(null);
     try {
@@ -342,11 +359,18 @@ export default function RequestQueue() {
             "You don't have permission to give first-level approval."
           );
         }
+        const assignedL2StaffId = options.assignedL2StaffId || "";
+        if (!assignedL2StaffId) {
+          throw new Error(
+            "Select which superadmin should give final approval."
+          );
+        }
         const updateData = {
           status: ENUMS.REQUEST_STATUS.PENDING,
           approvalStage: ENUMS.APPROVAL_STAGE.L2,
           l1ApproverStaffId: currentStaff.$id,
           l1DecisionAt: now,
+          assignedL2StaffId,
         };
         await assetRequestsService.update(request.$id, updateData, {
           sendNotification: false,
@@ -365,6 +389,14 @@ export default function RequestQueue() {
       } else if (stage === ENUMS.APPROVAL_STAGE.L2) {
         if (!permissions.canApproveL2(currentStaff)) {
           throw new Error("Only a superadmin can give final approval.");
+        }
+        if (
+          request.assignedL2StaffId &&
+          request.assignedL2StaffId !== currentStaff.$id
+        ) {
+          throw new Error(
+            "This request was assigned to another superadmin for final approval."
+          );
         }
 
         // Consumables are auto-issued on final approval.
@@ -458,6 +490,9 @@ export default function RequestQueue() {
 
       await loadRequests();
       setSelectedRequest(null);
+      setShowL2AssignDialog(false);
+      setRequestToAssignL2(null);
+      setSelectedL2StaffId("");
     } catch (error) {
       setError(error.message || "Failed to approve request. Please try again.");
       console.error("Approve error:", error);
@@ -597,16 +632,17 @@ export default function RequestQueue() {
         }
       }
 
-      // Superadmins: strict order — do not show L1 requests in the default queue.
-      // They only see items awaiting final (L2) approval, or approved and ready to issue.
-      // Explicit status filters can still surface history.
+      // Superadmins: only L2 items assigned to them (+ ready-to-issue for store).
+      // Unassigned legacy L2 items remain visible to any superadmin.
       const isSuperAdmin =
         currentStaff && permissions.canApproveL2(currentStaff);
       if (isSuperAdmin && selectedStatus === "all") {
         const stage = getStage(request);
         const awaitingL2 =
           request.status === ENUMS.REQUEST_STATUS.PENDING &&
-          stage === ENUMS.APPROVAL_STAGE.L2;
+          stage === ENUMS.APPROVAL_STAGE.L2 &&
+          (!request.assignedL2StaffId ||
+            request.assignedL2StaffId === currentStaff.$id);
         const readyToIssue =
           request.status === ENUMS.REQUEST_STATUS.APPROVED;
         if (!awaitingL2 && !readyToIssue) return false;
@@ -683,6 +719,23 @@ export default function RequestQueue() {
     staff,
     currentStaff,
   ]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    activeTab,
+    searchTerm,
+    selectedStatus,
+    selectedRequester,
+    selectedPriority,
+    dateRange,
+  ]);
+
+  const pagination = useMemo(
+    () => paginateItems(filteredRequests, currentPage, PAGE_SIZE),
+    [filteredRequests, currentPage]
+  );
+  const pagedRequests = pagination.items;
 
   if (loading) {
     return <PageLoading message="Loading requests..." />;
@@ -1002,100 +1055,80 @@ export default function RequestQueue() {
 
         {/* Requests List */}
         {!loading && staff.length > 0 && filteredRequests.length > 0 && (
-          <div className="space-y-6">
-            {filteredRequests.map((request) => (
+          <div className="space-y-3">
+            {pagedRequests.map((request) => {
+              const aggregated = aggregateResolvedItems(
+                request.resolvedItems || []
+              );
+              const purposeSummary = summarizeRequestPurpose(request.purpose);
+              const dateRange = formatRequestDateRange(
+                request.issueDate,
+                request.expectedReturnDate,
+                formatDate
+              );
+
+              return (
               <Card
                 key={request.$id}
-                className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl hover:shadow-2xl transition-shadow duration-200"
+                className="bg-white border border-gray-200/80 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200"
               >
-                <CardContent className="p-6">
-                  <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start space-y-4 lg:space-y-0">
-                    <div className="flex-1 space-y-4">
-                      {/* Request Header */}
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3
-                            className="text-lg font-semibold tracking-tight"
-                            style={{
-                              color: "color-mix(in srgb, var(--org-primary) 82%, #0f172a 18%)",
-                              textShadow: "0 8px 18px rgba(14, 99, 112, 0.18)",
-                            }}
-                          >
-                            Request #{request.$id.slice(-8).toUpperCase()}
-                          </h3>
-                          <p
-                            className="text-sm font-medium flex items-center gap-2"
-                            style={{
-                              color: "color-mix(in srgb, var(--org-primary) 70%, #1f2937 30%)",
-                            }}
-                          >
-                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-[var(--org-primary)]"></span>
-                            by {getRequesterName(request.requesterStaffId)}
-                          </p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          {request.status === ENUMS.REQUEST_STATUS.PENDING ? (
-                            <Badge className="bg-amber-50 text-amber-700 border-amber-200">
-                              {getStage(request) === ENUMS.APPROVAL_STAGE.L2
-                                ? "Awaiting final approval"
-                                : "Awaiting L1 approval"}
-                            </Badge>
-                          ) : (
-                            <Badge className={getStatusBadgeColor(request.status)}>
-                              {request.status}
-                            </Badge>
-                          )}
-                        </div>
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          Request #{request.$id.slice(-8).toUpperCase()}
+                        </h3>
+                        {request.status === ENUMS.REQUEST_STATUS.PENDING ? (
+                          <Badge className="bg-amber-50 text-amber-700 border-amber-200">
+                            {getStage(request) === ENUMS.APPROVAL_STAGE.L2
+                              ? "Awaiting final approval"
+                              : "Awaiting L1 approval"}
+                          </Badge>
+                        ) : (
+                          <Badge className={getStatusBadgeColor(request.status)}>
+                            {request.status}
+                          </Badge>
+                        )}
+                        <span className="text-xs text-gray-500">
+                          by {getRequesterName(request.requesterStaffId)}
+                        </span>
                       </div>
 
-                      {/* Request Details */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <h4 className="text-sm font-medium text-slate-700 mb-2">
-                            Purpose
-                          </h4>
-                          <p className="text-sm text-slate-600">
-                            {request.purpose}
-                          </p>
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-medium text-slate-700 mb-2">
-                            Duration
-                          </h4>
-                          <p className="text-sm text-slate-600">
-                            {formatDate(request.issueDate)} -{" "}
-                            {formatDate(request.expectedReturnDate)}
-                          </p>
-                        </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {aggregated.length > 0 ? (
+                          aggregated.slice(0, 5).map(({ item, quantity, id }) => (
+                            <Badge
+                              key={id}
+                              className="text-xs bg-[var(--org-primary)]/8 text-[var(--org-primary-dark)] border-[var(--org-primary)]/20"
+                            >
+                              {formatItemQuantityLabel(item, quantity)}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-500">
+                            No items specified
+                          </span>
+                        )}
+                        {aggregated.length > 5 ? (
+                          <Badge variant="secondary" className="text-xs">
+                            +{aggregated.length - 5} more
+                          </Badge>
+                        ) : null}
                       </div>
 
-                      {/* Requested Items — name × quantity (not one pill per unit) */}
-                      <div className="mb-4">
-                        <h4 className="text-sm font-medium text-slate-700 mb-2">
-                          Requested Items
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
-                          {aggregateResolvedItems(request.resolvedItems || []).map(
-                            ({ item, quantity, id }) => (
-                              <Badge
-                                key={id}
-                                className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100"
-                              >
-                                {formatItemQuantityLabel(item, quantity)}
-                              </Badge>
-                            )
-                          )}
-                          {(request.resolvedItems || []).length === 0 && (
-                            <span className="text-sm text-gray-500">
-                              No items specified
-                            </span>
-                          )}
-                        </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                        {dateRange ? <span>{dateRange}</span> : null}
+                        {purposeSummary ? (
+                          <span className="truncate max-w-xl text-gray-600">
+                            {purposeSummary}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <Button
                         asChild
                         variant="outline"
@@ -1103,24 +1136,38 @@ export default function RequestQueue() {
                         className="border-[var(--org-primary)]/30 text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
                       >
                         <Link href={`/requests/${request.$id}`}>
-                          View Details
+                          View
                         </Link>
                       </Button>
 
                       {request.status === ENUMS.REQUEST_STATUS.PENDING &&
                         (() => {
                           const stage = getStage(request);
+                          const canActL2 =
+                            permissions.canApproveL2(currentStaff) &&
+                            (!request.assignedL2StaffId ||
+                              request.assignedL2StaffId === currentStaff?.$id);
                           const canAct =
                             stage === ENUMS.APPROVAL_STAGE.L2
-                              ? permissions.canApproveL2(currentStaff)
+                              ? canActL2
                               : permissions.canApproveL1(currentStaff);
 
                           if (!canAct) {
+                            const assignedName =
+                              request.assignedL2StaffId &&
+                              (staff.find(
+                                (s) => s.$id === request.assignedL2StaffId
+                              )?.name ||
+                                superadmins.find(
+                                  (s) => s.$id === request.assignedL2StaffId
+                                )?.name);
                             return (
-                              <span className="text-sm text-slate-500 self-center px-1">
+                              <span className="text-xs text-slate-500 self-center px-1">
                                 {stage === ENUMS.APPROVAL_STAGE.L2
-                                  ? "Awaiting final approval by a superadmin"
-                                  : "Awaiting first-level approval"}
+                                  ? assignedName
+                                    ? `Awaiting ${assignedName}`
+                                    : "Awaiting superadmin"
+                                  : "Awaiting L1"}
                               </span>
                             );
                           }
@@ -1131,8 +1178,18 @@ export default function RequestQueue() {
                               <Button
                                 size="sm"
                                 disabled={decisionLoading}
-                                onClick={() => handleApprove(request)}
-                                className="bg-org-gradient text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+                                onClick={() => {
+                                  if (isFinal) {
+                                    handleApprove(request);
+                                  } else {
+                                    setRequestToAssignL2(request);
+                                    setSelectedL2StaffId(
+                                      superadmins[0]?.$id || ""
+                                    );
+                                    setShowL2AssignDialog(true);
+                                  }
+                                }}
+                                className="bg-org-gradient text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
                               >
                                 {decisionLoading ? (
                                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1145,7 +1202,7 @@ export default function RequestQueue() {
                                 size="sm"
                                 disabled={decisionLoading}
                                 onClick={() => handleDenyClick(request)}
-                                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+                                className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50"
                               >
                                 <XCircle className="w-4 h-4 mr-2" />
                                 Deny
@@ -1159,11 +1216,11 @@ export default function RequestQueue() {
                         <Button
                           asChild
                           size="sm"
-                          className="bg-org-gradient text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
+                          className="bg-[var(--org-accent)] hover:bg-[var(--org-accent-dark)] text-white border-0 shadow-sm"
                         >
                           <Link href={`/admin/issue/${request.$id}`}>
                             <Zap className="w-4 h-4 mr-2" />
-                            Issue Assets
+                            Issue
                           </Link>
                         </Button>
                       )}
@@ -1171,7 +1228,17 @@ export default function RequestQueue() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
+
+            <ListPagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.totalItems}
+              pageSize={PAGE_SIZE}
+              onPageChange={setCurrentPage}
+              itemLabel="requests"
+            />
           </div>
         )}
       </div>
@@ -1290,6 +1357,113 @@ export default function RequestQueue() {
                   </>
                 ) : (
                   "Deny request"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* L1 → pick which superadmin handles L2 */}
+      <Dialog
+        open={showL2AssignDialog}
+        onOpenChange={(open) => {
+          setShowL2AssignDialog(open);
+          if (!open) {
+            setRequestToAssignL2(null);
+            setSelectedL2StaffId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden border-0 shadow-none">
+          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+            <div className="px-6 pt-6 pb-4">
+              <DialogTitle className="text-lg font-semibold text-slate-900">
+                Send for final approval
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-sm text-slate-500 leading-relaxed">
+                Choose one superadmin. Only they will be notified and can give
+                L2 approval for this request.
+              </DialogDescription>
+            </div>
+
+            <div className="px-6 pb-5 space-y-4">
+              {requestToAssignL2 && (
+                <div className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-sm text-slate-700">
+                  Request #
+                  {requestToAssignL2.$id.slice(-8).toUpperCase()}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-slate-700">
+                  Superadmin <span className="text-red-500">*</span>
+                </Label>
+                {superadmins.length === 0 ? (
+                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    No superadmins found. Ask a system admin to assign the
+                    SYSTEM_ADMIN role.
+                  </p>
+                ) : (
+                  <Select
+                    value={selectedL2StaffId}
+                    onValueChange={setSelectedL2StaffId}
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Select superadmin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {superadmins.map((sa) => (
+                        <SelectItem key={sa.$id} value={sa.$id}>
+                          {sa.name || sa.email}
+                          {sa.email ? ` (${sa.email})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-slate-50 border-t border-slate-100">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowL2AssignDialog(false);
+                  setRequestToAssignL2(null);
+                  setSelectedL2StaffId("");
+                  setError("");
+                }}
+                disabled={decisionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() =>
+                  handleApprove(requestToAssignL2, {
+                    assignedL2StaffId: selectedL2StaffId,
+                  })
+                }
+                disabled={
+                  decisionLoading ||
+                  !selectedL2StaffId ||
+                  superadmins.length === 0
+                }
+                className="bg-org-gradient text-white"
+              >
+                {decisionLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending…
+                  </>
+                ) : (
+                  "Approve & assign"
                 )}
               </Button>
             </div>

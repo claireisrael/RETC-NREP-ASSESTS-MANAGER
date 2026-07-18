@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -70,7 +70,10 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 
-export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
+export function RequestForm({
+  itemType = ENUMS.ITEM_TYPE.ASSET,
+  initialItemIds = [],
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -78,6 +81,8 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
   const [staff, setStaff] = useState(null);
   const [availableItems, setAvailableItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
+  const [prefillNotice, setPrefillNotice] = useState(false);
+  const prefilledRef = useRef(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -121,11 +126,34 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
     expectedReturnDate: "",
   });
 
+  const normalizedInitialIds = useMemo(() => {
+    return [
+      ...new Set(
+        (Array.isArray(initialItemIds) ? initialItemIds : [])
+          .map((id) => String(id || "").trim())
+          .filter(Boolean)
+      ),
+    ];
+  }, [initialItemIds]);
+  const initialIdsKey = normalizedInitialIds.join("|");
+
   useEffect(() => {
     setError("");
+    prefilledRef.current = false;
+    setPrefillNotice(false);
+    setSelectedItems([]);
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConsumableRequest, isNrepOrg]);
+
+  // Allow re-prefill when navigating between different Request deep-links
+  useEffect(() => {
+    prefilledRef.current = false;
+    setPrefillNotice(false);
+    if (initialIdsKey) {
+      setSelectedItems([]);
+    }
+  }, [initialIdsKey]);
 
   // Reset project filter for RETC (RETC doesn't use projects)
   useEffect(() => {
@@ -133,6 +161,48 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
       setProjectFilter("all");
     }
   }, [isNrepOrg, projectFilter]);
+
+  // Prefill cart when landing from an item Request button
+  useEffect(() => {
+    if (prefilledRef.current || loadingItems) return;
+    if (!normalizedInitialIds.length || !availableItems.length) return;
+
+    const matched = availableItems.filter((item) =>
+      normalizedInitialIds.includes(item.id)
+    );
+    prefilledRef.current = true;
+    if (!matched.length) return;
+
+    setSelectedItems((prev) => {
+      const next = [...prev];
+      matched.forEach((item) => {
+        const detected = isApronItem(item) ? detectApronColor(item) : null;
+        const cartKey = detected
+          ? apronCartKey(item.id, detected.key)
+          : item.id;
+        if (next.some((selected) => (selected.cartKey || selected.id) === cartKey)) {
+          return;
+        }
+        next.push({
+          ...item,
+          cartKey,
+          colorKey: detected?.key || null,
+          colorLabel: detected?.label || null,
+          quantity: isConsumableRequest ? 1 : undefined,
+          note: "",
+          selectedAccessories: [],
+        });
+      });
+      return next;
+    });
+    setPrefillNotice(true);
+  }, [
+    availableItems,
+    loadingItems,
+    normalizedInitialIds,
+    initialIdsKey,
+    isConsumableRequest,
+  ]);
 
   const normalizeItem = (doc) => {
     const inferredType =
@@ -780,6 +850,16 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
         </Alert>
       )}
 
+      {prefillNotice && hasSelectedItems && (
+        <Alert className="bg-[var(--org-primary)]/8 border-[var(--org-primary)]/25">
+          <AlertDescription className="text-gray-800">
+            Item added to your cart. Use{" "}
+            <span className="font-semibold">Add {itemLabelPlural}</span> if you
+            need more, then finish the request details below.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card className="bg-white border border-gray-200 shadow-sm">
         <CardHeader className="bg-[var(--org-muted)]/60 border-b border-[var(--org-primary)]/20">
           <CardTitle className="text-xl font-semibold text-gray-900 flex items-center gap-2">
@@ -846,8 +926,9 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
           </div>
           <Button
             type="button"
+            variant="request"
             onClick={() => setPickerOpen(true)}
-            className="inline-flex items-center gap-2 bg-org-gradient text-white shadow-md hover:shadow-lg"
+            className="inline-flex items-center gap-2 shadow-md hover:shadow-lg"
           >
             <Plus className="w-4 h-4" />
             Add {itemLabel}
@@ -1129,8 +1210,9 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
         </Button>
         <Button
           type="submit"
+          variant="request"
           disabled={loading || requestedItemIds.length === 0 || !hasDetails}
-          className="bg-org-gradient hover:from-[var(--org-primary-dark)] hover:to-[var(--org-primary)] text-white shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
             <>
@@ -1476,8 +1558,9 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
               </p>
               <Button
                 type="button"
+                variant="request"
                 onClick={() => setPickerOpen(false)}
-                className="rounded-xl bg-org-gradient px-6 text-white shadow-sm hover:opacity-95"
+                className="rounded-xl px-6 shadow-sm"
               >
                 Done
               </Button>
