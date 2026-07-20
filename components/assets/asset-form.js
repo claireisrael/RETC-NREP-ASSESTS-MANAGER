@@ -13,7 +13,8 @@ import { Checkbox } from "../ui/checkbox"
 import { Alert, AlertDescription } from "../ui/alert"
 import { ImageUpload } from "../ui/image-upload"
 import { AccessoriesEditor } from "./accessories-editor"
-import { assetsService, departmentsService, staffService, projectsService } from "../../lib/appwrite/provider.js"
+import { L2AvailabilityPicker } from "./l2-availability-picker"
+import { assetsService, departmentsService, projectsService } from "../../lib/appwrite/provider.js"
 import { ENUMS } from "../../lib/appwrite/config.js"
 import { getCurrentStaff } from "../../lib/utils/auth.js"
 import { validateAssetTag } from "../../lib/utils/validation.js"
@@ -29,7 +30,6 @@ export function AssetForm({ asset, onSuccess }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [departments, setDepartments] = useState([])
-  const [staff, setStaff] = useState([])
   const [currentStaff, setCurrentStaff] = useState(null)
   const [projects, setProjects] = useState([])
   const { orgCode, theme } = useOrgTheme()
@@ -96,12 +96,15 @@ export function AssetForm({ asset, onSuccess }) {
     // Accessories that ship with this asset (e.g. Charger, Remote, HDMI cable)
     accessories: [],
 
+    // L2 availability gate (new items)
+    assignedAvailabilityL2StaffId: "",
+    availabilityNote: "",
+
     // Ownership
     departmentId: "",
-    custodianStaffId: "",
 
     // State
-    availableStatus: ENUMS.AVAILABLE_STATUS.AWAITING_DEPLOY,
+    availableStatus: ENUMS.AVAILABLE_STATUS.PENDING_AVAILABILITY,
     currentCondition: ENUMS.CURRENT_CONDITION.NEW,
 
     // Location
@@ -139,8 +142,10 @@ export function AssetForm({ asset, onSuccess }) {
         model: asset.model || "",
         manufacturer: asset.manufacturer || "",
         accessories: Array.isArray(asset.accessories) ? asset.accessories : [],
+        assignedAvailabilityL2StaffId:
+          asset.assignedAvailabilityL2StaffId || "",
+        availabilityNote: asset.availabilityNote || "",
         departmentId: asset.departmentId || "",
-        custodianStaffId: asset.custodianStaffId || "",
         availableStatus: asset.availableStatus || ENUMS.AVAILABLE_STATUS.AWAITING_DEPLOY,
         currentCondition: asset.currentCondition || ENUMS.CURRENT_CONDITION.NEW,
         locationName: asset.locationName || "",
@@ -164,14 +169,12 @@ export function AssetForm({ asset, onSuccess }) {
 
   const loadInitialData = async () => {
     try {
-      const [deptResult, staffResult, currentUser] = await Promise.all([
+      const [deptResult, currentUser] = await Promise.all([
         departmentsService.list(),
-        staffService.list(),
         getCurrentStaff(),
       ])
 
       setDepartments(deptResult.documents)
-      setStaff(staffResult.documents)
       setCurrentStaff(currentUser)
 
       if (isNrepOrg) {
@@ -250,8 +253,14 @@ export function AssetForm({ asset, onSuccess }) {
         ? formData.accessories.map((a) => a.trim()).filter(Boolean)
         : []
 
+      const isCreate = !asset
+      if (isCreate && !formData.assignedAvailabilityL2StaffId) {
+        throw new Error("Please select an L2 superadmin to confirm availability.")
+      }
+
       const submitData = {
         ...formDataWithoutProjectId,
+        custodianStaffId: asset?.custodianStaffId || "",
         accessories: cleanedAccessories,
         publicImages: JSON.stringify(mergedPublicImages || []),
         ...(resolvedAssetImage ? { assetImage: resolvedAssetImage } : {}),
@@ -264,6 +273,19 @@ export function AssetForm({ asset, onSuccess }) {
 
         // Initialize arrays
         attachmentFileIds: asset?.attachmentFileIds || [],
+      }
+
+      if (isCreate) {
+        submitData.availabilityConfirmStatus =
+          ENUMS.AVAILABILITY_CONFIRM_STATUS.PENDING
+        submitData.availableStatus =
+          ENUMS.AVAILABLE_STATUS.PENDING_AVAILABILITY
+        submitData.assignedAvailabilityL2StaffId =
+          formData.assignedAvailabilityL2StaffId
+        submitData.availabilityNote = formData.availabilityNote || ""
+      } else {
+        delete submitData.assignedAvailabilityL2StaffId
+        delete submitData.availabilityNote
       }
 
       // Handle projectId based on organization
@@ -318,7 +340,21 @@ export function AssetForm({ asset, onSuccess }) {
         await assetsService.update(asset.$id, submitData, currentStaff?.$id, "Asset updated via form")
       } else {
         // Create new asset
-        await assetsService.create(submitData, currentStaff?.$id)
+        const created = await assetsService.create(submitData, currentStaff?.$id)
+        try {
+          const { notifyAvailabilityPending } = await import(
+            "../../lib/services/return-availability-notifications.js"
+          )
+          await notifyAvailabilityPending({
+            item: created,
+            assignedL2StaffId: submitData.assignedAvailabilityL2StaffId,
+            createdBy: currentStaff,
+            orgId: submitData.orgId,
+            orgCode: currentOrgCode,
+          })
+        } catch (notifyErr) {
+          console.warn("Availability pending notify failed:", notifyErr)
+        }
       }
 
       if (onSuccess) {
@@ -506,6 +542,25 @@ export function AssetForm({ asset, onSuccess }) {
         </CardContent>
       </Card>
 
+      {!asset && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Availability confirmation</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <L2AvailabilityPicker
+              value={formData.assignedAvailabilityL2StaffId}
+              onChange={(v) =>
+                updateField("assignedAvailabilityL2StaffId", v)
+              }
+              note={formData.availabilityNote}
+              onNoteChange={(v) => updateField("availabilityNote", v)}
+              disabled={loading}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Ownership & Status */}
       <Card>
         <CardHeader>
@@ -555,26 +610,6 @@ export function AssetForm({ asset, onSuccess }) {
                 )}
               </div>
             )}
-
-            <div className="space-y-2">
-              <Label htmlFor="custodianStaffId">Custodian</Label>
-              <Select
-                value={formData.custodianStaffId}
-                onValueChange={(value) => updateField("custodianStaffId", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select custodian" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No custodian assigned</SelectItem>
-                  {staff.map((member) => (
-                    <SelectItem key={member.$id} value={member.$id}>
-                      {member.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

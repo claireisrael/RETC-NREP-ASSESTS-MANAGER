@@ -28,6 +28,8 @@ import { canIssueAsset } from "../../../../lib/utils/validation.js";
 import { EmailService } from "../../../../lib/services/email.js";
 import { assetImageService } from "../../../../lib/appwrite/image-service.js";
 import { aggregateResolvedItems } from "../../../../lib/utils/requested-items.js";
+import { isoToLocalDateInput } from "../../../../lib/utils/local-dates.js";
+import { resolveIssueReturnable } from "../../../../lib/services/return-reports.js";
 
 export default function IssueAssetsPage() {
   const params = useParams();
@@ -81,10 +83,9 @@ export default function IssueAssetsPage() {
 
       // Prefill return date from the request (required before issue).
       if (requestData.expectedReturnDate) {
-        const d = new Date(requestData.expectedReturnDate);
-        if (!Number.isNaN(d.getTime())) {
-          setExpectedReturnDate(d.toISOString().slice(0, 10));
-        }
+        setExpectedReturnDate(
+          isoToLocalDateInput(requestData.expectedReturnDate)
+        );
       }
 
       // Initialize issue data for each asset
@@ -142,22 +143,30 @@ export default function IssueAssetsPage() {
     setError("");
 
     try {
-      if (!expectedReturnDate) {
+      const anyReturnable = assets.some((asset) =>
+        resolveIssueReturnable(request, asset)
+      );
+
+      if (anyReturnable && !expectedReturnDate) {
         throw new Error(
-          "Please set the expected return date before issuing. Reminder emails use this date."
+          "Please set the expected return date before issuing returnable items. Reminder emails use this date."
         );
       }
-      const returnDate = new Date(`${expectedReturnDate}T12:00:00`);
-      if (Number.isNaN(returnDate.getTime())) {
-        throw new Error("Expected return date is invalid.");
+      let returnDateIso = null;
+      if (expectedReturnDate) {
+        const returnDate = new Date(`${expectedReturnDate}T12:00:00`);
+        if (Number.isNaN(returnDate.getTime())) {
+          throw new Error("Expected return date is invalid.");
+        }
+        returnDateIso = returnDate.toISOString();
       }
-      const returnDateIso = returnDate.toISOString();
 
-      // Validate all assets can be issued
+      // Validate status, then assign custodian (set at issue time, not on create)
       for (const asset of assets) {
-        // Assign asset to custodian
+        canIssueAsset(asset);
+
         try {
-          const assignCustodian = await assetsService.update(
+          await assetsService.update(
             asset.$id,
             {
               custodianStaffId: request.requesterStaffId,
@@ -165,13 +174,10 @@ export default function IssueAssetsPage() {
             staff.$id,
             `Asset custodian changed to #${request.$id.slice(-8)}`
           );
+          asset.custodianStaffId = request.requesterStaffId;
         } catch (err) {
           console.error("Error assigning custodian for asset:", asset.$id, err);
-          // throw new Error(`Failed to assign custodian for asset ${asset.name}: ${err.message}`)
         }
-
-        // Now Validate all assets can be issued
-        canIssueAsset(asset);
       }
 
       // Create issue records for each asset (qty aggregated from duplicated IDs)
@@ -180,6 +186,7 @@ export default function IssueAssetsPage() {
         const qty = Math.max(1, Number(asset.requestQuantity) || 1);
 
         // Create issue record. requesterStaffId captures WHO received the item.
+        const isReturnable = resolveIssueReturnable(request, asset);
         const issue = await assetIssuesService.create({
           requestId: request.$id,
           assetId: asset.$id,
@@ -190,7 +197,8 @@ export default function IssueAssetsPage() {
           preCondition: assetIssueData.preCondition,
           accessories: assetIssueData.accessories,
           issuedAt: new Date().toISOString(),
-          dueAt: returnDateIso,
+          dueAt: isReturnable ? returnDateIso : null,
+          isReturnable,
           handoverNote,
           acknowledgedByRequester: false,
         });
@@ -234,7 +242,7 @@ export default function IssueAssetsPage() {
       // Persist return date + mark fulfilled so reminders can fire on that day.
       await assetRequestsService.update(request.$id, {
         status: ENUMS.REQUEST_STATUS.FULFILLED,
-        expectedReturnDate: returnDateIso,
+        ...(returnDateIso ? { expectedReturnDate: returnDateIso } : {}),
       });
 
       // Send email notification to requester about asset issuance
@@ -463,12 +471,20 @@ export default function IssueAssetsPage() {
                     className="font-medium text-slate-600 text-sm"
                   >
                     Expected Return Date{" "}
-                    <span className="text-red-500">*</span>
+                    {assets.some((a) => resolveIssueReturnable(request, a)) ? (
+                      <span className="text-red-500">*</span>
+                    ) : (
+                      <span className="text-slate-400 font-normal">
+                        (not required)
+                      </span>
+                    )}
                   </Label>
                   <Input
                     id="expectedReturnDate"
                     type="date"
-                    required
+                    required={assets.some((a) =>
+                      resolveIssueReturnable(request, a)
+                    )}
                     value={expectedReturnDate}
                     onChange={(e) => setExpectedReturnDate(e.target.value)}
                     className="max-w-xs rounded-xl border-slate-200"
@@ -478,7 +494,7 @@ export default function IssueAssetsPage() {
                     }}
                   />
                   <p className="text-xs text-slate-500">
-                    Required for return reminders on the due date.
+                    Required when issuing returnable items (for due-date reminders).
                   </p>
                 </div>
               </div>

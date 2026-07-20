@@ -33,16 +33,19 @@ import {
   Eye,
   MapPin,
   Filter,
+  RotateCcw,
 } from "lucide-react";
 import {
   assetsService,
   assetRequestsService,
   projectsService,
+  isCatalogAvailabilityReady,
 } from "../../lib/appwrite/provider.js";
 import { assetImageService } from "../../lib/appwrite/image-service.js";
 import { getCurrentStaff } from "../../lib/utils/auth.js";
 import { ENUMS } from "../../lib/appwrite/config.js";
 import { validateRequestDates } from "../../lib/utils/validation.js";
+import { localDateInputToIso } from "../../lib/utils/local-dates.js";
 import { notifyRequestCreated } from "../../lib/services/approval-notifications.js";
 import { formatCategory } from "../../lib/utils/mappings.js";
 import { formatSubcategory, assetMatchesSubcategory, getSubcategoriesForCategory } from "../../lib/constants/asset-subcategories.js";
@@ -69,6 +72,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
+
+function isAdminConsumable(item) {
+  return (
+    item.consumableScope === ENUMS.CONSUMABLE_SCOPE.ADMIN ||
+    (!item.consumableScope && item.projectId === "ADMIN")
+  );
+}
+
+function canChooseReturnable(item, isConsumableRequest) {
+  return isConsumableRequest && !isAdminConsumable(item);
+}
 
 export function RequestForm({
   itemType = ENUMS.ITEM_TYPE.ASSET,
@@ -191,6 +205,10 @@ export function RequestForm({
           quantity: isConsumableRequest ? 1 : undefined,
           note: "",
           selectedAccessories: [],
+          isReturnable: canChooseReturnable(item, isConsumableRequest)
+            ? false
+            : !isConsumableRequest,
+          returnableChosen: !canChooseReturnable(item, isConsumableRequest),
         });
       });
       return next;
@@ -255,6 +273,8 @@ export function RequestForm({
       unit: isConsumableItem ? doc.unit || "" : "",
       imageUrl: primaryImage,
       fallbackInitial: doc.name?.charAt(0)?.toUpperCase() || "?",
+      canBeReturnable: Boolean(doc.canBeReturnable),
+      consumableScope: doc.consumableScope || "",
       raw: doc,
     };
   };
@@ -294,6 +314,7 @@ export function RequestForm({
       setProjectCatalog(projectsResult);
 
       const normalizedItems = (itemsResult.documents || [])
+        .filter((doc) => isCatalogAvailabilityReady(doc))
         .map(normalizeItem)
         .filter((item) => {
           if (!isConsumableRequest) return true;
@@ -538,6 +559,10 @@ export function RequestForm({
           quantity: isConsumableRequest ? 1 : undefined,
           note: "",
           selectedAccessories: [],
+          isReturnable: canChooseReturnable(item, isConsumableRequest)
+            ? false
+            : !isConsumableRequest,
+          returnableChosen: !canChooseReturnable(item, isConsumableRequest),
         },
       ];
     });
@@ -569,6 +594,8 @@ export function RequestForm({
           quantity: 1,
           note: "",
           selectedAccessories: [],
+          isReturnable: false,
+          returnableChosen: !canChooseReturnable(base, isConsumableRequest),
         },
       ];
     });
@@ -587,6 +614,35 @@ export function RequestForm({
             : [...current, accessory],
         };
       })
+    );
+  };
+
+  const handleSelectAllAccessories = (itemKey, accessories, selectAll) => {
+    setSelectedItems((prev) =>
+      prev.map((item) => {
+        if (getCartKey(item) !== itemKey) return item;
+        return {
+          ...item,
+          selectedAccessories: selectAll ? [...(accessories || [])] : [],
+        };
+      })
+    );
+  };
+
+  const handleReturnableChoice = (itemKey, willReturn) => {
+    setSelectedItems((prev) =>
+      prev.map((item) =>
+        getCartKey(item) === itemKey
+          ? {
+              ...item,
+              isReturnable: Boolean(willReturn),
+              returnableChosen: true,
+              selectedAccessories: willReturn
+                ? item.selectedAccessories || []
+                : [],
+            }
+          : item
+      )
     );
   };
 
@@ -645,7 +701,35 @@ export function RequestForm({
   }, [selectedItems, isConsumableRequest]);
 
   const hasSelectedItems = selectedItems.length > 0;
-  const hasDetails = formData.issueDate && formData.expectedReturnDate;
+  const requestNeedsReturn = useMemo(() => {
+    if (!isConsumableRequest) return true;
+    return selectedItems.some((item) => {
+      if (isAdminConsumable(item)) return false;
+      return Boolean(item.isReturnable);
+    });
+  }, [selectedItems, isConsumableRequest]);
+
+  const returnableItemCount = useMemo(
+    () =>
+      selectedItems.filter(
+        (item) => canChooseReturnable(item, isConsumableRequest) && item.isReturnable
+      ).length,
+    [selectedItems, isConsumableRequest]
+  );
+
+  const pendingReturnableChoices = useMemo(
+    () =>
+      selectedItems.filter(
+        (item) =>
+          canChooseReturnable(item, isConsumableRequest) && !item.returnableChosen
+      ).length,
+    [selectedItems, isConsumableRequest]
+  );
+
+  const hasDetails =
+    formData.issueDate &&
+    pendingReturnableChoices === 0 &&
+    (!requestNeedsReturn || formData.expectedReturnDate);
   const canSubmit = hasSelectedItems && hasDetails;
 
   const steps = useMemo(
@@ -722,7 +806,17 @@ export function RequestForm({
         }
       }
 
-      validateRequestDates(formData.issueDate, formData.expectedReturnDate);
+      if (pendingReturnableChoices > 0) {
+        throw new Error(
+          "Please choose whether each project consumable will be returned or consumed only."
+        );
+      }
+
+      if (requestNeedsReturn) {
+        validateRequestDates(formData.issueDate, formData.expectedReturnDate);
+      } else if (!formData.issueDate) {
+        throw new Error("Please choose an issue date.");
+      }
 
       const itemNotes = selectedItems
         .filter((item) => item.note && item.note.trim().length > 0)
@@ -764,17 +858,40 @@ export function RequestForm({
         apronColorLines.push(`${baseName} colors: ${parts.join(", ")}`);
       });
 
-      const requestedAccessories = [...accessoryLines, ...apronColorLines];
+      const returnableLines = selectedItems
+        .filter((item) => canChooseReturnable(item, isConsumableRequest))
+        .map((item) => {
+          const details = item.tag ? `${item.name} (${item.tag})` : item.name;
+          return `${details}: ${item.isReturnable ? "returnable" : "non-returnable"}`;
+        });
 
-      const purposeLines = [...itemNotes, ...accessoryLines, ...apronColorLines];
+      const requestedAccessories = [
+        ...accessoryLines,
+        ...apronColorLines,
+        ...returnableLines,
+      ];
+
+      const purposeLines = [
+        ...itemNotes,
+        ...accessoryLines,
+        ...apronColorLines,
+        ...returnableLines,
+      ];
 
       const requestData = {
         requesterStaffId: staff.$id,
         purpose: purposeLines.length
           ? purposeLines.map((line) => `- ${line}`).join("\n")
           : "Request submitted",
-        issueDate: new Date(formData.issueDate).toISOString(),
-        expectedReturnDate: new Date(formData.expectedReturnDate).toISOString(),
+        issueDate: localDateInputToIso(formData.issueDate),
+        ...(requestNeedsReturn && formData.expectedReturnDate
+          ? {
+              expectedReturnDate: localDateInputToIso(
+                formData.expectedReturnDate
+              ),
+            }
+          : {}),
+        isReturnable: requestNeedsReturn,
         requestedItems: requestedItemIds,
         requestedAccessories,
         status: ENUMS.REQUEST_STATUS.PENDING,
@@ -897,17 +1014,63 @@ export function RequestForm({
                 className="text-sm font-medium text-gray-700 flex items-center gap-2"
               >
                 <Clock className="w-4 h-4 text-primary-600" />
-                Expected Return Date *
+                Expected Return Date
+                {requestNeedsReturn ? (
+                  <span className="text-red-500">*</span>
+                ) : null}
               </Label>
-              <Input
-                id="expectedReturnDate"
-                type="date"
-                value={formData.expectedReturnDate}
-                onChange={(e) => updateField("expectedReturnDate", e.target.value)}
-                required
-                disabled={loading}
-                className="border-gray-300 focus:border-primary-500 focus:ring-primary-500"
-              />
+              {requestNeedsReturn ? (
+                <div
+                  className="space-y-3 rounded-xl border px-4 py-4"
+                  style={{
+                    borderColor:
+                      "color-mix(in srgb, var(--org-highlight) 35%, transparent)",
+                    background:
+                      "color-mix(in srgb, var(--org-highlight) 8%, white)",
+                  }}
+                >
+                  <p className="text-sm text-slate-700 leading-relaxed">
+                    {isConsumableRequest ? (
+                      <>
+                        You marked{" "}
+                        <span className="font-semibold text-slate-900">
+                          {returnableItemCount} item
+                          {returnableItemCount === 1 ? "" : "s"}
+                        </span>{" "}
+                        for return. When will you bring them back?
+                      </>
+                    ) : (
+                      <>When do you expect to return these assets?</>
+                    )}
+                  </p>
+                  <Input
+                    id="expectedReturnDate"
+                    type="date"
+                    value={formData.expectedReturnDate}
+                    onChange={(e) =>
+                      updateField("expectedReturnDate", e.target.value)
+                    }
+                    required
+                    disabled={loading}
+                    className="rounded-xl border-slate-200 bg-white focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5">
+                  <p className="text-sm text-slate-600 leading-relaxed">
+                    {isConsumableRequest ? (
+                      <>
+                        No return date needed for administrative items. For
+                        project consumables, choose{" "}
+                        <span className="font-medium">“Will return”</span> on
+                        an item below and this field will appear.
+                      </>
+                    ) : (
+                      <>No return date required for this request.</>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -1147,14 +1310,35 @@ export function RequestForm({
                       Array.isArray(item.accessories) &&
                       item.accessories.length > 0 && (
                         <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                          <Label className="text-sm font-medium text-gray-700">
-                            Attach accessories
-                          </Label>
+                          <div className="flex items-center justify-between gap-2">
+                            <Label className="text-sm font-medium text-gray-700">
+                              Attach accessories
+                            </Label>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() =>
+                                handleSelectAllAccessories(
+                                  itemKey,
+                                  item.accessories,
+                                  (item.selectedAccessories || []).length !==
+                                    item.accessories.length
+                                )
+                              }
+                            >
+                              {(item.selectedAccessories || []).length ===
+                              item.accessories.length
+                                ? "Clear all"
+                                : "Select all"}
+                            </Button>
+                          </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {item.accessories.map((accessory) => {
-                              const checked = (item.selectedAccessories || []).includes(
-                                accessory
-                              );
+                              const checked = (
+                                item.selectedAccessories || []
+                              ).includes(accessory);
                               return (
                                 <label
                                   key={accessory}
@@ -1173,6 +1357,149 @@ export function RequestForm({
                           </div>
                         </div>
                       )}
+
+                    {isConsumableRequest && isAdminConsumable(item) && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p className="text-sm font-medium text-slate-800">
+                          Administrative consumable
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Used on issue — no return choice or return date needed.
+                        </p>
+                      </div>
+                    )}
+
+                    {canChooseReturnable(item, isConsumableRequest) && (
+                      <div
+                        className={[
+                          "space-y-3 rounded-xl border-2 p-4 transition-colors",
+                          !item.returnableChosen
+                            ? "border-amber-200 bg-amber-50/50"
+                            : item.isReturnable
+                              ? "border-emerald-200 bg-emerald-50/40"
+                              : "border-slate-200 bg-slate-50/80",
+                        ].join(" ")}
+                      >
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-900">
+                            Will you return this item?
+                          </Label>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Choose one option — required before you can submit.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleReturnableChoice(itemKey, true)
+                            }
+                            className={[
+                              "flex items-start gap-3 rounded-xl border-2 p-3.5 text-left transition-all",
+                              item.returnableChosen && item.isReturnable
+                                ? "border-emerald-400 bg-white shadow-sm ring-2 ring-emerald-500/20"
+                                : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50",
+                            ].join(" ")}
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                              <RotateCcw className="h-4 w-4" />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-semibold text-slate-900">
+                                Yes, will return
+                              </span>
+                              <span className="mt-0.5 block text-[11px] text-slate-500">
+                                You&apos;ll set a return date above
+                              </span>
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleReturnableChoice(itemKey, false)
+                            }
+                            className={[
+                              "flex items-start gap-3 rounded-xl border-2 p-3.5 text-left transition-all",
+                              item.returnableChosen && !item.isReturnable
+                                ? "border-slate-400 bg-white shadow-sm ring-2 ring-slate-400/20"
+                                : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+                            ].join(" ")}
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                              <Package className="h-4 w-4" />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-semibold text-slate-900">
+                                No, consume only
+                              </span>
+                              <span className="mt-0.5 block text-[11px] text-slate-500">
+                                Stock deducted — nothing to bring back
+                              </span>
+                            </span>
+                          </button>
+                        </div>
+                        {!item.returnableChosen && (
+                          <p className="text-xs font-medium text-amber-700">
+                            Please choose an option for this item.
+                          </p>
+                        )}
+                        {item.isReturnable &&
+                          item.returnableChosen &&
+                          Array.isArray(item.accessories) &&
+                          item.accessories.length > 0 && (
+                            <div className="space-y-2 border-t border-emerald-200/80 pt-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <Label className="text-sm font-medium text-gray-700">
+                                  Accessories you&apos;ll take
+                                </Label>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs"
+                                  onClick={() =>
+                                    handleSelectAllAccessories(
+                                      itemKey,
+                                      item.accessories,
+                                      (item.selectedAccessories || [])
+                                        .length !== item.accessories.length
+                                    )
+                                  }
+                                >
+                                  {(item.selectedAccessories || []).length ===
+                                  item.accessories.length
+                                    ? "Clear all"
+                                    : "Select all"}
+                                </Button>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {item.accessories.map((accessory) => {
+                                  const checked = (
+                                    item.selectedAccessories || []
+                                  ).includes(accessory);
+                                  return (
+                                    <label
+                                      key={accessory}
+                                      className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-2"
+                                    >
+                                      <Checkbox
+                                        checked={checked}
+                                        onCheckedChange={() =>
+                                          handleAccessoryToggle(
+                                            itemKey,
+                                            accessory
+                                          )
+                                        }
+                                      />
+                                      <span>{accessory}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <Label className="text-sm font-medium text-gray-700">

@@ -99,6 +99,7 @@ import {
 } from "../../../lib/services/approval-notifications.js";
 import { listSuperadminStaff } from "../../../lib/utils/approvers.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
+import { resolveIssueReturnable } from "../../../lib/services/return-reports.js";
 import { Query } from "appwrite";
 import Link from "next/link";
 import { PageLoading, SectionLoading } from "../../../components/ui/loading";
@@ -387,7 +388,9 @@ export default function RequestQueue() {
         }
       } else if (stage === ENUMS.APPROVAL_STAGE.L2) {
         if (!permissions.canApproveL2(currentStaff)) {
-          throw new Error("Only a superadmin can give final approval.");
+          throw new Error(
+            "Only Paul Nduhuura or Mukisa Nicholas can give final approval."
+          );
         }
         if (
           request.assignedL2StaffId &&
@@ -427,6 +430,7 @@ export default function RequestQueue() {
               );
 
               // Record who received the consumable so it shows in the item view.
+              const isReturnable = resolveIssueReturnable(request, consumable);
               await assetIssuesService.create({
                 requestId: request.$id,
                 assetId: consumable.$id,
@@ -435,7 +439,10 @@ export default function RequestQueue() {
                 quantity: qty,
                 issuedByStaffId: currentStaff.$id,
                 issuedAt: now,
-                dueAt: request.expectedReturnDate || null,
+                dueAt: isReturnable
+                  ? request.expectedReturnDate || null
+                  : null,
+                isReturnable,
               });
             } catch (stockError) {
               console.error(
@@ -527,7 +534,7 @@ export default function RequestQueue() {
         !permissions.canApproveL2(currentStaff)
       ) {
         throw new Error(
-          "Only a superadmin can act on a request awaiting final approval."
+          "Only Paul Nduhuura or Mukisa Nicholas can act on a request awaiting final approval."
         );
       }
       if (
@@ -1399,8 +1406,8 @@ export default function RequestQueue() {
                     Send for final approval
                   </DialogTitle>
                   <DialogDescription className="mt-1 text-sm text-slate-500 leading-relaxed">
-                    Pick one L2 superadmin. Only they will get the email and can
-                    give the final decision.
+                    Choose Paul Nduhuura or Mukisa Nicholas for final approval.
+                    Only the person you pick will get the email and can approve.
                   </DialogDescription>
                 </div>
               </div>
@@ -1446,12 +1453,19 @@ export default function RequestQueue() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-slate-700">
-                  Select L2 approver <span className="text-red-500">*</span>
+                  Final approver <span className="text-red-500">*</span>
                 </Label>
                 {superadmins.length === 0 ? (
                   <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
-                    No superadmins found. Ask a system admin to assign the
-                    SYSTEM_ADMIN role.
+                    Paul or Nicholas could not be loaded. Check that{" "}
+                    <span className="font-mono text-xs">
+                      mukisanic@nrep.ug
+                    </span>{" "}
+                    and{" "}
+                    <span className="font-mono text-xs">
+                      pnduhuura@nrep.ug
+                    </span>{" "}
+                    exist in staff with SYSTEM_ADMIN.
                   </p>
                 ) : (
                   <div className="space-y-2 max-h-[240px] overflow-y-auto pr-0.5">

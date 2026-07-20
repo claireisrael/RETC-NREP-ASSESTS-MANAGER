@@ -46,6 +46,10 @@ import {
 import { ENUMS } from "../../../../lib/appwrite/config.js";
 import { useOrgTheme } from "../../../../components/providers/org-theme-provider";
 import { validateRequestDates } from "../../../../lib/utils/validation.js";
+import {
+  isoToLocalDateInput,
+  localDateInputToIso,
+} from "../../../../lib/utils/local-dates.js";
 import { formatCategory } from "../../../../lib/utils/mappings.js";
 import { Query } from "appwrite";
 import { Dialog, DialogContent } from "../../../../components/ui/dialog";
@@ -85,9 +89,6 @@ export default function EditRequestPage() {
 
   const loadData = async () => {
     try {
-      console.log("Loading request with ID:", params.requestId);
-
-      // Add timeout and better error handling
       const requestPromise = assetRequestsService.get(params.requestId);
       const staffPromise = getCurrentStaff();
 
@@ -101,13 +102,6 @@ export default function EditRequestPage() {
           throw new Error(`Failed to load staff data: ${err.message}`);
         }),
       ]);
-
-      console.log("Request data loaded:", requestData);
-
-      // Check if request has invalid image references
-      if (requestData.requestedItems && requestData.requestedItems.length > 0) {
-        console.log("Requested items:", requestData.requestedItems);
-      }
 
       // Check if user can edit this request
       const viewMode = getCurrentViewMode();
@@ -137,8 +131,8 @@ export default function EditRequestPage() {
       // Set form data
       setFormData({
         purpose: requestData.purpose,
-        issueDate: requestData.issueDate.split("T")[0], // Format for date input
-        expectedReturnDate: requestData.expectedReturnDate.split("T")[0],
+        issueDate: isoToLocalDateInput(requestData.issueDate),
+        expectedReturnDate: isoToLocalDateInput(requestData.expectedReturnDate),
       });
 
       // Load current assets and set them as selected
@@ -264,26 +258,17 @@ export default function EditRequestPage() {
         throw new Error("Please select at least one asset");
       }
 
-      const dateValidation = validateRequestDates(
-        formData.issueDate,
-        formData.expectedReturnDate
-      );
-      if (!dateValidation.isValid) {
-        throw new Error(dateValidation.error);
-      }
+      validateRequestDates(formData.issueDate, formData.expectedReturnDate);
 
       // Update request data
       const updateData = {
         purpose: formData.purpose.trim(),
-        issueDate: new Date(formData.issueDate).toISOString(),
-        expectedReturnDate: new Date(formData.expectedReturnDate).toISOString(),
+        issueDate: localDateInputToIso(formData.issueDate),
+        expectedReturnDate: localDateInputToIso(formData.expectedReturnDate),
         requestedItems: selectedAssets.map((asset) => asset.$id),
       };
 
-      console.log("Updating request with ID:", request.$id);
-      console.log("Update data:", updateData);
       await assetRequestsService.update(request.$id, updateData);
-      console.log("Request updated successfully");
       router.push(`/requests/${request.$id}`);
     } catch (err) {
       setError(err.message || "Failed to update request");
