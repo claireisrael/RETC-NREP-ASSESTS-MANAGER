@@ -38,6 +38,8 @@ import { useOrgTheme } from "../../../../components/providers/org-theme-provider
 import { getConsumableCategoriesForOrg } from "../../../../lib/constants/consumable-categories.js";
 import { getCurrentOrgId } from "../../../../lib/utils/org.js";
 import { AccessoriesEditor } from "../../../../components/assets/accessories-editor";
+import { L2AvailabilityPicker } from "../../../../components/assets/l2-availability-picker";
+import { Checkbox } from "../../../../components/ui/checkbox";
 
 export default function NewConsumablePage() {
   const router = useRouter();
@@ -81,6 +83,9 @@ export default function NewConsumablePage() {
     isPublic: false,
     publicSummary: "",
     accessories: [],
+    canBeReturnable: false,
+    assignedAvailabilityL2StaffId: "",
+    availabilityNote: "",
     consumableScope: isNrepOrg
       ? ENUMS.CONSUMABLE_SCOPE.PROJECT
       : ENUMS.CONSUMABLE_SCOPE.ADMIN,
@@ -224,6 +229,15 @@ export default function NewConsumablePage() {
         setSaving(false);
         return;
       }
+      if (!consumable.assignedAvailabilityL2StaffId) {
+        toast.error("Please select an L2 superadmin to confirm availability.");
+        setSaving(false);
+        return;
+      }
+
+      const isAdminScope =
+        !isNrepOrg ||
+        consumable.consumableScope === ENUMS.CONSUMABLE_SCOPE.ADMIN;
 
       const consumableData = {
         assetTag:
@@ -254,6 +268,14 @@ export default function NewConsumablePage() {
           ? consumable.accessories.map((a) => a.trim()).filter(Boolean)
           : [],
 
+        canBeReturnable: isAdminScope
+          ? false
+          : Boolean(consumable.canBeReturnable),
+        availabilityConfirmStatus: ENUMS.AVAILABILITY_CONFIRM_STATUS.PENDING,
+        assignedAvailabilityL2StaffId:
+          consumable.assignedAvailabilityL2StaffId,
+        availabilityNote: consumable.availabilityNote || "",
+
         // Public information
         isPublic: consumable.isPublic || false,
         publicSummary: consumable.publicSummary || "",
@@ -266,7 +288,7 @@ export default function NewConsumablePage() {
         // Required fields for ASSETS collection
         departmentId: "",
         custodianStaffId: "",
-        availableStatus: ENUMS.AVAILABLE_STATUS.AVAILABLE,
+        availableStatus: ENUMS.AVAILABLE_STATUS.PENDING_AVAILABILITY,
         currentCondition: ENUMS.CURRENT_CONDITION.NEW,
         purchaseDate: null,
         warrantyExpiryDate: null,
@@ -307,7 +329,21 @@ export default function NewConsumablePage() {
       }
       consumableData.orgId = currentOrgId.trim();
 
-      await assetsService.create(consumableData, currentStaff.$id);
+      const created = await assetsService.create(consumableData, currentStaff.$id);
+
+      try {
+        const { notifyAvailabilityPending } = await import(
+          "../../../../lib/services/return-availability-notifications.js"
+        );
+        await notifyAvailabilityPending({
+          item: created,
+          assignedL2StaffId: consumableData.assignedAvailabilityL2StaffId,
+          createdBy: currentStaff,
+          orgId: consumableData.orgId,
+        });
+      } catch (notifyErr) {
+        console.warn("Availability pending notify failed:", notifyErr);
+      }
 
       toast.success("Consumable created successfully!");
 
@@ -702,6 +738,63 @@ export default function NewConsumablePage() {
                 disabled={saving}
                 itemLabel="consumable"
               />
+              {isNrepOrg &&
+                consumable.consumableScope ===
+                  ENUMS.CONSUMABLE_SCOPE.PROJECT && (
+                  <div className="mt-6 flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <Checkbox
+                      id="canBeReturnable"
+                      checked={Boolean(consumable.canBeReturnable)}
+                      onCheckedChange={(checked) =>
+                        setConsumable((prev) => ({
+                          ...prev,
+                          canBeReturnable: !!checked,
+                        }))
+                      }
+                      disabled={saving}
+                    />
+                    <div>
+                      <Label
+                        htmlFor="canBeReturnable"
+                        className="cursor-pointer text-sm font-medium text-slate-800"
+                      >
+                        Can be returnable
+                      </Label>
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                        When enabled, requesters can choose to borrow this item
+                        with a return date. Administrative consumables never
+                        use return dates.
+                      </p>
+                    </div>
+                  </div>
+                )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <CardTitle className="text-lg font-semibold text-slate-900">
+                Availability confirmation
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 bg-white">
+              <L2AvailabilityPicker
+                value={consumable.assignedAvailabilityL2StaffId}
+                onChange={(v) =>
+                  setConsumable((prev) => ({
+                    ...prev,
+                    assignedAvailabilityL2StaffId: v,
+                  }))
+                }
+                note={consumable.availabilityNote}
+                onNoteChange={(v) =>
+                  setConsumable((prev) => ({
+                    ...prev,
+                    availabilityNote: v,
+                  }))
+                }
+                disabled={saving}
+              />
             </CardContent>
           </Card>
 
@@ -772,7 +865,8 @@ export default function NewConsumablePage() {
                 (isNrepOrg &&
                   consumable.consumableScope ===
                     ENUMS.CONSUMABLE_SCOPE.PROJECT &&
-                  !consumable.projectId)
+                  !consumable.projectId) ||
+                !consumable.assignedAvailabilityL2StaffId
               }
               className="h-11 px-6 bg-orange-600 hover:bg-orange-700 text-white"
             >

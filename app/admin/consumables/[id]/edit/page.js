@@ -166,6 +166,9 @@ export default function EditConsumable() {
         accessories: Array.isArray(consumableData.accessories)
           ? consumableData.accessories
           : [],
+        canBeReturnable: Boolean(consumableData.canBeReturnable),
+        consumableScope:
+          consumableData.consumableScope || ENUMS.CONSUMABLE_SCOPE.PROJECT,
         // Parse publicImages if it's a string
         publicImages: typeof consumableData.publicImages === 'string'
           ? JSON.parse(consumableData.publicImages || '[]')
@@ -278,6 +281,16 @@ export default function EditConsumable() {
         JSON.stringify(originalAccessories)
       ) {
         changedFields.accessories = cleanedAccessories;
+      }
+
+      if (
+        Boolean(consumable.canBeReturnable) !==
+        Boolean(originalConsumable.canBeReturnable)
+      ) {
+        changedFields.canBeReturnable =
+          consumable.consumableScope === ENUMS.CONSUMABLE_SCOPE.ADMIN
+            ? false
+            : Boolean(consumable.canBeReturnable);
       }
 
       // If no changes, show message and return
@@ -872,7 +885,7 @@ export default function EditConsumable() {
               Items that go with this consumable
             </p>
           </div>
-          <div className="p-6">
+          <div className="p-6 space-y-4">
             <AccessoriesEditor
               value={consumable.accessories}
               onChange={(next) =>
@@ -881,6 +894,31 @@ export default function EditConsumable() {
               disabled={saving}
               itemLabel="consumable"
             />
+            {consumable.consumableScope !== ENUMS.CONSUMABLE_SCOPE.ADMIN && (
+              <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-gray-300"
+                  checked={Boolean(consumable.canBeReturnable)}
+                  onChange={(e) =>
+                    setConsumable((prev) => ({
+                      ...prev,
+                      canBeReturnable: e.target.checked,
+                    }))
+                  }
+                  disabled={saving}
+                />
+                <span>
+                  <span className="font-semibold text-slate-800">
+                    Can be returnable
+                  </span>
+                  <span className="mt-0.5 block text-slate-600">
+                    Requesters may choose a return date for project consumables
+                    marked returnable.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
         </div>
 

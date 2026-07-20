@@ -22,6 +22,8 @@ import {
   X,
   ChevronLeft,
   ShoppingCart,
+  RotateCcw,
+  ClipboardCheck,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -287,6 +289,12 @@ export default function Sidebar() {
       badge: null,
     },
     {
+      label: "My issued items",
+      href: "/issued",
+      icon: RotateCcw,
+      badge: null,
+    },
+    {
       label: "Guest Portal",
       href: "/guest",
       icon: Globe,
@@ -331,6 +339,26 @@ export default function Sidebar() {
       icon: FileText,
       badge: pendingRequestsCount > 0 ? pendingRequestsCount.toString() : null,
       visible: (s) => permissions.canManageRequests(s),
+    },
+    {
+      label: "Return reports",
+      href: "/admin/returns",
+      icon: RotateCcw,
+      badge: null,
+      visible: (s) =>
+        permissions.canManageAssets(s) ||
+        permissions.canIssueAssets(s) ||
+        permissions.canApproveL2(s),
+    },
+    {
+      label: "Availability",
+      href: "/admin/availability",
+      icon: ClipboardCheck,
+      badge: null,
+      visible: (s) =>
+        permissions.canManageAssets(s) ||
+        permissions.canManageConsumables(s) ||
+        permissions.canApproveL2(s),
     },
     {
       label: "User Management",

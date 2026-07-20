@@ -13,6 +13,7 @@ const statusColors = {
   [ENUMS.AVAILABLE_STATUS.REPAIR_REQUIRED]: "bg-red-100 text-red-800 border-red-200",
   [ENUMS.AVAILABLE_STATUS.OUT_FOR_SERVICE]: "bg-gray-100 text-gray-800 border-gray-200",
   [ENUMS.AVAILABLE_STATUS.AWAITING_DEPLOY]: "bg-cyan-100 text-cyan-800 border-cyan-200",
+  [ENUMS.AVAILABLE_STATUS.PENDING_AVAILABILITY]: "bg-amber-100 text-amber-800 border-amber-200",
   [ENUMS.AVAILABLE_STATUS.RETIRED]: "bg-gray-100 text-gray-800 border-gray-200",
   [ENUMS.AVAILABLE_STATUS.DISPOSED]: "bg-black text-white border-black",
 

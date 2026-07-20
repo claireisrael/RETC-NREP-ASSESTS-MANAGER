@@ -167,6 +167,7 @@ export default function LayoutProvider({ children }) {
     "/assets",
     "/consumables",
     "/requests",
+    "/issued",
   ];
 
   // Calculate route types using useMemo - MUST be before any conditional returns

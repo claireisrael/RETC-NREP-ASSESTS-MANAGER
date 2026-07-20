@@ -18,7 +18,9 @@ const PUBLIC_ROUTES = [
 const PROTECTED_ROUTES = [
   "/admin",
   "/assets",
+  "/consumables",
   "/requests",
+  "/issued",
   "/dashboard",
   "/api/notifications",
 ];
@@ -32,6 +34,7 @@ const ORG_REQUIRED_ROUTES = [
   "/assets",
   "/consumables",
   "/requests",
+  "/issued",
 ];
 
 export async function middleware(request) {
